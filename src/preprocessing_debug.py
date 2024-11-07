@@ -13,6 +13,13 @@ https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/main/videollama2/train.py#L224
 
 https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/main/videollama2/mm_utils.py
 
+
+            # TODO: adapt from data module dataset (LazySupervisedDataset)'s __getitem__ to preprocess video chunks per TRs
+            # determine start and duration of video frame window for each target TR
+            # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L387
+            # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L315
+
+
 # TODO: (down the road) add audio branch to video-llama2
 
 https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/model/videollama2_arch.py#L115
@@ -42,11 +49,6 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-#from transformers import (
-#    CLIPImageProcessor,
-#    CLIPVisionConfig,
-#    CLIPVisionModel,
-#)
 sys.path.append('../')
 
 from VideoLLaMA2.videollama2.mm_utils import (
@@ -69,11 +71,12 @@ NUM_FRAMES = 8
 MAX_FRAMES = 32
 NUM_FRAMES_PER_SECOND = 1
 
-"""
-Params adapted from videollama2 dataclass : https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L71
-Default parameters from : https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/scripts/custom/finetune.sh#L45
-"""
+
 def get_arguments():
+    """
+    Params adapted from videollama2 dataclass : https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L71
+    Default parameters from : https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/scripts/custom/finetune.sh#L45
+    """
     parser = argparse.ArgumentParser(
         description="Compile parameters for input feature lazy_loading for VideoLLaMa2"
     )
@@ -104,7 +107,7 @@ def get_arguments():
     parser.add_argument(
         '--vision_tower', type=str,
         #default='openai/clip-vit-large-patch14-336',  # requires internet access
-        default='models/vision_tower/openai/clip-vit-large-patch14-336',  # locally saved copy
+        default='../models/vision_tower/openai/clip-vit-large-patch14-336',  # locally saved copy
     )
     parser.add_argument(
         '--mm_vision_select_layer', type=int, default=-2,
@@ -406,17 +409,12 @@ def make_lazy_loading_videollama2(ll_args):
                     },
                 )
 
-            # loose notes to clean up
+
             # TODO: produce hdf5 file of encoded text and video frames for lazy loading
             # For each modality, have one row corresponding to a single TR
             # Important : don't align based on time windows (e.g., pad text, or cut last brain TRs after
             # movie done, or skip first TRs for which predictor window is not full length), as this will be done inside the dataloader
             # # (no need to re-generate the data to play w window)
-
-            # TODO: adapt from data module dataset (LazySupervisedDataset)'s __getitem__ to preprocess video chunks per TRs
-            # determine start and duration of video frame window for each target TR
-            # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L387
-            # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L315
 
 """
 
