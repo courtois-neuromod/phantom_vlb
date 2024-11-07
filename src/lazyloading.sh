@@ -28,7 +28,7 @@ python preprocessing.py \
     --model_type videollama2 \
     --model_path mistralai/Mistral-7B-Instruct-v0.2 \
     --model_max_length 2048 \
-    --window_max_length 2036 \
+    --window_max_length 2020 \
     --multimodal_token_index -201 \
     --vision_tower ../models/vision_tower/openai/clip-vit-large-patch14-336 \
     --mm_vision_select_layer -2 \

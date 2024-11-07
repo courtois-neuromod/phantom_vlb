@@ -195,7 +195,7 @@ def prep_tokenizer(ll_args):
         model_max_length=ll_args.model_max_length,
         padding_side="right",
         use_fast=True,
-        truncation=False,
+        truncate=False,
         #token=access_token,  # just needed first time
     )
 
