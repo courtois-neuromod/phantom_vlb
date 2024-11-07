@@ -57,10 +57,6 @@ from VideoLLaMA2.videollama2.mm_utils import (
 )
 from VideoLLaMA2.videollama2.model.encoder import CLIPVisionTower
 
-# HuggingFace read-access token
-# token name: vllama2_from_beluga
-# access_token = "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"
-
 """
 Values from
 https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/constants.py#L20

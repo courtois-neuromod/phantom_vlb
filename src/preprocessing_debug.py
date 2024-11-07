@@ -1,33 +1,17 @@
 """
 TODO:
-
-Step1: implement prepocessing steps to build .h5 of input data from brain, vision, language (and audio)...
+Step1: implement prepocessing steps to build .h5 of input data from vision & language input...
+Current script
 
 Step 2: implement my own Dataset class w __getitem__ and __len__
+TODO: adapt from data module dataset (LazySupervisedDataset)'s __getitem__ to preprocess video chunks per TRs
+determine start and duration of video frame window for each target TR
+https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L387
+https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L315
 
 Step 3: implement datamodule
 
-From video-llama2 dataset (in pytorch)
-https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/main/videollama2/train.py#L224
-
-
-https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/main/videollama2/mm_utils.py
-
-
-            # TODO: adapt from data module dataset (LazySupervisedDataset)'s __getitem__ to preprocess video chunks per TRs
-            # determine start and duration of video frame window for each target TR
-            # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L387
-            # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L315
-
-
 # TODO: (down the road) add audio branch to video-llama2
-
-https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/model/videollama2_arch.py#L115
-
-https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/eval/inference_video_mcqa_videomme.py#L65
-
-link to making lazy-loading file from F Paugam's video_transformer project
-https://github.com/courtois-neuromod/video_transformer/blob/0906e9a71a2fdb511190f7a757c8aadcb1f6c990/src/datasets/replay_datamodule.py#L125
 """
 
 import argparse
@@ -58,12 +42,8 @@ from VideoLLaMA2.videollama2.mm_utils import (
 )
 from VideoLLaMA2.videollama2.model.encoder import CLIPVisionTower
 
-# HuggingFace read-access token
-# token name: vllama2_from_beluga
-# access_token = "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"
-
 """
-Just here as a reference to pick sampling frequency
+Just here as a reference to help pick videoframe sampling frequency
 Values from
 https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/constants.py#L20
 """
@@ -176,35 +156,28 @@ def get_done_ep(lazyload_path):
 
 def prep_video_processor(ll_args):
     """
-    # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/scripts/custom/finetune.sh#L45
-    # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/model/videollama2_arch.py#L43
+    Adapted from:
+    https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L510
+    https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/scripts/custom/finetune.sh#L45
+    https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/model/videollama2_arch.py#L43
+    https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/model/encoder.py#L12
 
-    VideoLLaMA2 has a vision tower, which is a pre-trained encoder from OpenAI's Clip (weights are frozen during finetuning)
+    VideoLLaMA2 has a vision tower, which is a pre-trained encoder from OpenAI's Clip (weights are frozen during fine-tuning)
     The VideoLLaMA2 datamodule has a dataset that, with __getitem__, processes a video through the vision tower (nn.Module's forward)
     before handing it over to the datamodule that gives batches to the main model.
 
-    Here, with lazy-loading, I'm trying to process each video in advance through the data tower and store as .h5 for lazy loading
-    to speed up processing
+    Here, with lazy-loading, I'm processing each video in advance through the vision tower and storing its features as .h5
+    for lazy loading to speed up processing
 
-    From FP's video_transformer, decide on the window of video, and corresponding language, to pair w each TR
+    From FP's video_transformer, decide on the window of video (here n = 3 TRs) to pair w a given target TR
 
     Configs are split into data classes (model, training and data) in train script, and specified in finteune script:
     https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/main/scripts/custom/finetune.sh#L45
     """
 
-    # TODO: implement vllama2 library to import and re-use the CLIPVisionTower class as is (it's the vision tower)
-    #https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/scripts/custom/finetune.sh#L45
-
-    # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/model/videollama2_arch.py#L43
-    # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/model/encoder.py#L12
     vision_tower = CLIPVisionTower(ll_args.vision_tower, args=ll_args)
 
-    # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L510
     vision_tower.to(dtype=torch.bfloat16 if ll_args.bf16 else torch.float16, device=ll_args.device)
-
-    # alternative (for beluga); TODO: test in interactive session
-    #torch.cuda.set_device('cuda:0')
-    #model.to(device)
 
     ll_args.image_size = vision_tower.image_size
     ll_args.video_processor = vision_tower.video_processor if hasattr(vision_tower, "video_processor") else vision_tower.image_processor
@@ -223,9 +196,7 @@ def prep_tokenizer(ll_args):
         padding_side="right",
         use_fast=True,
         truncation=False,
-        #truncation=True,  # TODO: this was added; I need to truncate, but from the left; check how to do it...
-        #truncation_side="left",
-        #token=access_token,
+        #token=access_token,  # just needed first time
     )
 
     if tokenizer.pad_token is None:
@@ -236,12 +207,19 @@ def prep_tokenizer(ll_args):
 
 def prep_text(text, tokenizer, window_max_length):
     """
-    Source
+    Adapted from
     https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L168
-    """
-    # from
-    # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/constants.py#L28
+    https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/mm_utils.py#L289
+
+    videollama2 inference script:
+    https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/__init__.py#L32
+
+    constants from
+    https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/constants.py#L28
+
+    As a reference (for video frame input)
     multimodal_token_index = -201
+    """
 
     # truncate text input to fix max language window length (in tokens)
     tokens = tokenizer.tokenize(text.strip())
@@ -249,21 +227,15 @@ def prep_text(text, tokenizer, window_max_length):
         tokens = tokens[-window_max_length:]
     text = tokenizer.convert_tokens_to_string(tokens)
 
-    # prep: pass text through .strip() to remove extra white spaces,
-    # and add modal token to begining of input text for each entry
-
+    # Text Prep:
+    # pass text through .strip() to remove extra white spaces,
+    # add modal token to begining of input text for each entry
     modal_token = "<video>"
     message = [{'role': 'user', 'content': modal_token + '\n' + text.strip()}]
 
-    #then process message to pass through tokenizer...
-    # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L168
-    #https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/mm_utils.py#L289
-
-    #check also: inference script
-    #https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/__init__.py#L32
     prompt = tokenizer.apply_chat_template(message, tokenize=False, add_generation_prompt=False)
 
-    # return list, not pytorch tensor (otherwise set return_tensors='pt')
+    # returns list, not pytorch tensor (otherwise set return_tensors='pt')
     input_ids = tokenizer_multimodal_token(prompt, tokenizer, modal_token, return_tensors=None)#.unsqueeze(0).long().cuda()
 
     return input_ids
@@ -324,19 +296,21 @@ def extract_video_chunk(vreader, processor, end_time, win_dur, fps, num_frames_o
 
 def make_lazy_loading_videollama2(ll_args):
     """
-    Support function to preprocess input data into pre-saved features for
-    multimodal brain alignment experiments with video-LLaMA2.
+    Support function to preprocess input data (language and video frames) into
+    pre-saved features for lazy loading during multimodal brain alignment
+    experiments with video-LLaMA2.
 
     Script to be ran separately ahead of training / testing / validation,
     for each season of Friends.
 
     Output is a HDF5 file to be used by a dataloader for lazy loading.
+    For each modality, have one row corresponding of features correspond to a single TR
+
     This script is adapted from
     https://github.com/courtois-neuromod/video_transformer/blob/0906e9a71a2fdb511190f7a757c8aadcb1f6c990/src/datasets/replay_datamodule.py#L125
 
     The video and text data pre-processing steps are adapted from video-LLaMA2
     https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/main/videollama2/train.py
-
     """
     print(ll_args)
 
@@ -352,7 +326,7 @@ def make_lazy_loading_videollama2(ll_args):
     tokenizer = prep_tokenizer(ll_args)
 
     print(input_file_paths)
-    """
+
     for ep_num, in_paths in tqdm(input_file_paths.items(), desc='Processing season episodes'):
 
         if ep_num not in done_epnum:
@@ -409,14 +383,6 @@ def make_lazy_loading_videollama2(ll_args):
                     },
                 )
 
-
-            # TODO: produce hdf5 file of encoded text and video frames for lazy loading
-            # For each modality, have one row corresponding to a single TR
-            # Important : don't align based on time windows (e.g., pad text, or cut last brain TRs after
-            # movie done, or skip first TRs for which predictor window is not full length), as this will be done inside the dataloader
-            # # (no need to re-generate the data to play w window)
-
-"""
 
 if __name__ == "__main__":
 
