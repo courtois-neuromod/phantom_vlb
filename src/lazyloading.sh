@@ -3,8 +3,8 @@
 #SBATCH --job-name=videollama2_lazyloading
 #SBATCH --output=/project/rrg-pbellec/mstlaure/phantom_vlb/slurm_files/slurm-%A_%a.out
 #SBATCH --error=/project/rrg-pbellec/mstlaure/phantom_vlb/slurm_files/slurm-%A_%a.err
-#SBATCH --time=2:00:00
-#SBATCH --cpus-per-task=16
+#SBATCH --time=12:00:00
+#SBATCH --cpus-per-task=32
 #SBATCH --gpus-per-node=v100:1
 #SBATCH --mem-per-cpu=4000M
 #SBATCH --mail-type=ALL
@@ -30,7 +30,7 @@ python preprocessing.py \
     --model_max_length 2048 \
     --window_max_length 2036 \
     --multimodal_token_index -201 \
-    --vision_tower models/vision_tower/openai/clip-vit-large-patch14-336 \
+    --vision_tower ../models/vision_tower/openai/clip-vit-large-patch14-336 \
     --mm_vision_select_layer -2 \
     --mm_vision_select_feature patch \
     --bf16 True \
