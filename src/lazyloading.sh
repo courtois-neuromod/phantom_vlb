@@ -18,7 +18,7 @@ source /home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/vllama2_venv/bin
 
 DATA_DIR="../../algonauts_dset/competitors"
 OUTP_DIR="../results/videollama2/lazyloading/friends"
-SEASON = "${1}"
+SEASON="${1}"
 
 # --num_frames 8 \
 python preprocessing.py \
