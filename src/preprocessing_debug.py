@@ -28,14 +28,8 @@ import glob
 import math
 import os
 import sys
-
-#from dataclasses import dataclass, field
 from pathlib import Path
 
-#import hydra
-#from omegaconf import DictConfig, OmegaConf
-
-"""
 import h5py
 import numpy as np
 import pandas as pd
@@ -53,7 +47,6 @@ from tqdm import tqdm
 #    CLIPVisionConfig,
 #    CLIPVisionModel,
 #)
-
 sys.path.append('../')
 
 from VideoLLaMA2.videollama2.mm_utils import (
@@ -62,7 +55,7 @@ from VideoLLaMA2.videollama2.mm_utils import (
     tokenizer_multimodal_token,
 )
 from VideoLLaMA2.videollama2.model.encoder import CLIPVisionTower
-"""
+
 # HuggingFace read-access token
 # token name: vllama2_from_beluga
 # access_token = "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"
@@ -341,41 +334,10 @@ def make_lazy_loading_videollama2(ll_args):
     The video and text data pre-processing steps are adapted from video-LLaMA2
     https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/main/videollama2/train.py
 
-    TODO: adapt this below
-    The frames are uniformly downsampled, effectively dividing the original
-    framerate by `time_downsample`.
-
-    Args:
-        brain_path: str, path to the HDF5 file containing the extracted brain timeseries
-        input_data_path: str, path to the repository containing the .mkv (visual, audio) and .tsv (language) files
-        lazy_load_path: str, path to the HDF5 to create
-        epi_list: list of str, list of episodes to use
-        n_frames: int, number of video frames in one sample (to match one TR)
-        modalities: list of str, name of the input modalities to use
-        time_downsample: int, Factor by which the frame frequency is divided, i.e.
-            one out of every `time_downsample` frames will be kept
-        stride: int, stride between samples, None will make it equal to n_frames.
-            Defaults to None.
-        fps: int, Numbre of frames per seconds in the original data. Defaults to 60. (videogames; friends: 29.97?)
-
-
-    OLD Args:
-        data_path: str, path to the HDF5 file containing the frames and modalities
-        lazy_load_path: str, path to the HDF5 to create
-        data_list: list of str, list of the HDF5 dataset paths in the data file to
-            use
-        n_frames: int, number of frames in one sample
-        modalities: list of str, name of the other modalities to use, only frames
-            are used if the list is empty
-        time_downsample: int, Factor by which the frame frequency is divided, i.e.
-            one out of every `time_downsample` frames will be kept
-        stride: int, stride between samples, None will make it equal to n_frames.
-            Defaults to None.
-        fps: int, Numbre of frames per seconds in the original data. Defaults to 60.
     """
     print(ll_args)
 
-    """
+
     ll_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # output file with lazyloading data
@@ -386,6 +348,8 @@ def make_lazy_loading_videollama2(ll_args):
     ll_args = prep_video_processor(ll_args)
     tokenizer = prep_tokenizer(ll_args)
 
+    print(input_file_paths)
+    """
     for ep_num, in_paths in tqdm(input_file_paths.items(), desc='Processing season episodes'):
 
         if ep_num not in done_epnum:
