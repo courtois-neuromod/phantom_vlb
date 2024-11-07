@@ -107,9 +107,9 @@ def get_arguments():
     parser.add_argument(
         '--frames_per_tr', type=int, default=4,
     )
-    parser.add_argument(
-        '--num_frames', type=int, default=8,
-    )
+    #parser.add_argument(
+    #    '--num_frames', type=int, default=8,
+    #)
     parser.add_argument(
         '--tr', type=float, default=1.49,
     )
@@ -272,7 +272,7 @@ def extract_video_chunk(vreader, processor, end_time, win_dur, fps, num_frames_o
     f_end   = min(int(end_time * fps) - 1, num_frames_of_video - 1)
     all_frame_indices = list(range(f_start, f_end + 1))
 
-    duration = len(frame_indices)
+    duration = len(all_frame_indices)
     num_frames = round((end_time - start_time) / tr) * frames_per_tr
     sampled_frame_indices = [all_frame_indices[i] for i in frame_sample(duration, mode='uniform', num_frames=num_frames)]
 
@@ -325,7 +325,7 @@ def make_lazy_loading_videollama2(ll_args):
     ll_args = prep_video_processor(ll_args)
     tokenizer = prep_tokenizer(ll_args)
 
-    print(input_file_paths)
+    #print(input_file_paths)
 
     for ep_num, in_paths in tqdm(input_file_paths.items(), desc='Processing season episodes'):
 
@@ -341,7 +341,7 @@ def make_lazy_loading_videollama2(ll_args):
                 text_ids = prep_text(text_chunk, tokenizer, ll_args.window_max_length)
                 transcript_tokens.append(
                     np.pad(
-                        text_ids, (0, ll_args.window_max_length-len(text_ids))
+                        text_ids, (0, (ll_args.model_max_length + 1)-len(text_ids))
                     )
                 )
 
