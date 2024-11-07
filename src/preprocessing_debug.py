@@ -79,7 +79,7 @@ def get_arguments():
         '--model_max_length', type=int, default=2048,
     )
     parser.add_argument(
-        '--window_max_length', type=int, default=2036,
+        '--window_max_length', type=int, default=2020,
     )
     parser.add_argument(
         '--multimodal_token_index', type=int, default=-201,
