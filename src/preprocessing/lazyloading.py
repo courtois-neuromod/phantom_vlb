@@ -33,7 +33,7 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-sys.path.append('../')
+sys.path.append('../../')
 
 from VideoLLaMA2.videollama2.mm_utils import (
     expand2square,

@@ -1,0 +1,13 @@
+subject: null
+random_state: null
+
+defaults:
+  - _self_
+  - datamodule: null
+  - logger: wandb
+  - lrscheduler: constant
+  - optimizer: adamw
+  - trainer: base
+  - experiment: null
+
+output_dir: ./outputs

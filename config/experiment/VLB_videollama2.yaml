@@ -1,0 +1,21 @@
+# @package _global_
+
+datamodule:
+  _target_:
+    src.datamodule.videollama2_vlb_datamodule.VLBDataModule
+  config:
+    _target_:
+      src.datamodule.videollama2_vlb_datamodule.VLBDataModuleConfig
+    features_path: ./results/videollama2/lazyloading/friends/friends_*_features.h5
+    timeseries_path:
+      "../algonauts_dset/competitors/fmri/*/func/*_task-friends_space-\
+      MNI152NLin2009cAsym_atlas-Schaefer18_parcel-1000Par7Net_desc-s123456_bold.h5"
+    lazyload_path: ${SLURM}/path/to/friends_${subject}_llFile.h5  # TODO: fix to SLURM temp file
+    delay: 3
+    window: 3
+    seasons: [s01, s02, s04, s05, s06]
+    subject: ${subject}
+    random_state: ${random_state}
+    batch_size: 1
+    num_workers: 0
+    shuffle_val_data: True

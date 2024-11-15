@@ -21,7 +21,7 @@ OUTP_DIR="../results/videollama2/lazyloading/friends"
 SEASON="${1}"
 
 # --num_frames 8 \
-python preprocessing.py \
+python lazyloading.py \
     --input_transcript_path "${DATA_DIR}/stimuli/transcripts/friends/${SEASON}" \
     --input_video_path "../../friends_algonauts/data/friends.stimuli/${SEASON}" \
     --lazy_load_path "${OUTP_DIR}/friends_${SEASON}_features.h5" \
