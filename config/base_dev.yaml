@@ -3,8 +3,6 @@ random_state: 1234
 
 defaults:
   - _self_
-  - datamodule: null
-  - litmodule: null
   - experiment: null
 
 output_dir: ./results
