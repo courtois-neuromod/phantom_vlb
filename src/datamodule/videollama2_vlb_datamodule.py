@@ -224,7 +224,6 @@ class VLBDataModule(LightningDataModule):
         self.config: VLBDataModuleConfig = config
         self.datasets = VLBDatasets(self.config)
 
-    @final
     def x_dataloader(
         self: "VLBDataModule",
         dataset: VLB_Dataset,
@@ -254,7 +253,6 @@ class VLBDataModule(LightningDataModule):
             num_workers=self.config.num_workers,
         )
 
-    @final
     def train_dataloader(self: "VLBDataModule") -> DataLoader:
         """Calls :meth:`x_dataloader` w/ :attr:`datasets` ``.train``.
 
@@ -264,7 +262,6 @@ class VLBDataModule(LightningDataModule):
         """
         return self.x_dataloader(dataset=self.datasets.train)
 
-    @final
     def val_dataloader(self: "VLBDataModule") -> DataLoader[Tensor]:
         """Calls :meth:`x_dataloader` w/ :attr:`datasets` ``.val``.
 
