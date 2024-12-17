@@ -1,13 +1,14 @@
 subject: null
-random_state: null
+random_state: 1234
 
 defaults:
   - _self_
   - datamodule: null
+  - litmodule: null
   - logger: wandb
   - lrscheduler: constant
   - optimizer: adamw
   - trainer: base
   - experiment: null
 
-output_dir: ./outputs
+output_dir: ./results

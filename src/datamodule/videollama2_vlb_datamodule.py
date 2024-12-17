@@ -15,9 +15,15 @@ https://github.com/courtois-neuromod/phantom_LLM/blob/dev_align/phantom_LLM/src/
 https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L248
 """
 
+import os
 from dataclasses import dataclass
+from pathlib import Path
 
-from datasets import Dataset as HFDataset  # huggingface datasets
+import h5py
+import numpy as np
+import torch
+
+#from datasets import Dataset as HFDataset  # huggingface datasets
 from lightning.pytorch import LightningDataModule
 from omegaconf import DictConfig
 from torch import Tensor
@@ -34,6 +40,7 @@ class VLB_Dataset(Dataset):
         """
         self.config = config
         self.seasons: list[str] = seasons
+        self.ds_file = None
 
         # todo: fix this!
         # implement function that builds datamatrices for predictor features and output target features
@@ -48,48 +55,49 @@ class VLB_Dataset(Dataset):
         # - concatenate across all runs... sample from it w getitem function
         idx = 0
         self.idx_dict = {}
+        self.ll_path = self.config.lazyload_path.replace('*', self.config.subject).replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"])
         # load brain timeseries .h5 file
-        bpath = Path(self.config.timeseries_path.replace('*', self.config.subject)).resolve()
-        b_file = h5py.File(bpath, "r")
+        b_path = Path(self.config.timeseries_path.replace('*', self.config.subject)).resolve()
+        b_file = h5py.File(b_path, "r")
         ep_keys = {
-            run.split("_")[2]: (ses, run) for run in bfile[ses].keys() for ses in b_file.keys()
+            run.split("_")[1].split("-")[-1]: (ses, run) for ses, val in b_file.items() for run in val.keys()
         }
 
         for s in self.seasons:
 
-            fpath = Path(self.config.features_path.replace('*', s)).resolve()
+            f_path = Path(self.config.features_path.replace('*', f"s{s[-1]}")).resolve()
             epi_list = [
-                x for x in h5py.File(fpath, "r").keys()
+                x for x in h5py.File(f_path, "r").keys()
             ]
 
             for ep_num in epi_list:
                 if ep_num in ep_keys:
-                    s, r = ep_keys[ep_num]
-                    run_tseries = np.array(bpath[s][r])[(self.config.window-1)+self.config.delay:]
+                    ses, run = ep_keys[ep_num]
+                    run_tseries = np.array(b_file[ses][run])[(self.config.window-1)+self.config.delay:]
 
-                    run_vision = np.array(h5py.File(fpath, "r")[ep_num]['video_features'])[(self.config.window-1):]
-                    run_language = np.array(h5py.File(fpath, "r")[ep_num]['transcript_features'])[(self.config.window-1):]
+                    run_vision = np.array(h5py.File(f_path, "r")[ep_num]['video_features'])[(self.config.window-1):]
+                    run_language = np.array(h5py.File(f_path, "r")[ep_num]['transcript_features'])[(self.config.window-1):]
 
                     n_rows = np.min(
-                        run_tseries.shape[0], run_vision.shape[0], run_language.shape[0],
+                        (run_tseries.shape[0], run_vision.shape[0], run_language.shape[0]),
                     )
 
                     for n in range(n_rows):
-                        with h5py.File(self.config.lazyload_path, "a") as f:
-                            group = f.create_group(idx)
+                        with h5py.File(self.ll_path, "a") as f:
+                            group = f.create_group(f"{idx}")
                             group.create_dataset(
-                                f"{idx}_timeseries", data=run_tseries[idx],
+                                f"{idx}_timeseries", data=run_tseries[n],
                             )
                             group.create_dataset(
-                                f"{idx}_vision", data=run_vision[idx],
+                                f"{idx}_vision", data=run_vision[n],
                             )
                             group.create_dataset(
-                                f"{idx}_language", data=run_language[idx],
+                                f"{idx}_language", data=run_language[n],
                             )
 
                         idx += 1
 
-        with h5py.File(self.config.lazyload_path, "r") as f:
+        with h5py.File(self.ll_path, "r") as f:
             self.length = max([int(s) for s in f.keys()]) + 1
 
     def __len__(self):
@@ -97,10 +105,10 @@ class VLB_Dataset(Dataset):
 
     def __getitem__(self, idx):
         if self.ds_file is None:
-            self.ds_file = h5py.File(self.config.lazyload_path, "r")
+            self.ds_file = h5py.File(self.ll_path, "r")
         item = {}
         for mod in ['timeseries', 'vision', 'language']:
-            item[mod] = torch.from_numpy(self.ds_file[f"{idx}"][f"{idx}_{mod}"]).float()
+            item[mod] = torch.from_numpy(np.array(self.ds_file[f"{idx}"][f"{idx}_{mod}"])).float()
         return item
 
 
@@ -123,13 +131,13 @@ class VLBDatasets:
     test: VLB_Dataset | None = None
 
     def __post_init__(self):
-        # TODO: implement instantiation of datasets
         # split seasons between train and val datasets
         r = np.random.RandomState(self.config.random_state)
         val_season = r.choice(self.config.seasons, 1).tolist()
         train_seasons = [
             s for s in self.config.seasons if s not in val_season
         ]
+        # instantiate lazyloading datasets
         self.val = VLB_Dataset(self.config, val_season)
         self.train = VLB_Dataset(self.config, train_seasons)
 
