@@ -32,7 +32,7 @@ https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50
 
 @hydra.main(
     version_base=None,
-    config_name="base",
+    config_name="base_dev",
     config_path="config",
 )
 def train(config: DictConfig) -> None:
