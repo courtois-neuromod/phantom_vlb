@@ -125,7 +125,8 @@ class VLBDatasets:
         test: Testing dataset.
         predict: Prediction dataset.
     """
-    config: VLBDataModuleConfig
+    #config: VLBDataModuleConfig
+    config
     train: VLB_Dataset | None = None
     val: VLB_Dataset | None = None
     test: VLB_Dataset | None = None
@@ -174,9 +175,9 @@ class VLBDataModuleConfig:
     delay: str
     window: str
     random_state: int
-    batch_size: 1
-    num_workers: 0
     shuffle_val_data: bool
+    batch_size: int = 1
+    num_workers: int = 0
 
     # from cneuromax; re-use?
     #device: An[str, one_of("cpu", "gpu")] = "${config.device}"
