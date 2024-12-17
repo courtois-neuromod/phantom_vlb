@@ -76,7 +76,7 @@ class VLBDataModuleConfig:
 
 class VLB_Dataset(Dataset):
     def __init__(
-        self: VLB_Dataset,
+        self: "VLB_Dataset",
         config: VLBDataModuleConfig,
         seasons: list[str],
     ) -> None:
