@@ -30,16 +30,64 @@ from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 
 
+@dataclass
+class VLBDataModuleConfig:
+    """Holds :class:`VLBDataModuleConfig` config values.
+
+    Args:
+        data_dir: See :paramref:`~.BaseSubtaskConfig.data_dir`.
+        device: See :paramref:`~.FittingSubtaskConfig.device`.
+        shuffle_val_data: Whether to shuffle the validation data\
+            during training.
+        max_per_device_batch_size: See\
+            :attr:`~BaseDataModule.per_device_batch_size`. Sets an\
+            upper bound on the aforementioned attribute.
+        fixed_per_device_batch_size: See\
+            :attr:`~BaseDataModule.per_device_batch_size`. Setting this\
+            value skips the batch size search in\
+            :func:`.find_good_per_device_batch_size` which is\
+            not recommended for resource efficiency.
+        fixed_per_device_num_workers: See\
+            :attr:`~BaseDataModule.per_device_num_workers`. Setting\
+            this value skips the num workers search in\
+            :func:`.find_good_per_device_num_workers` which is\
+            not recommended for resource efficiency.
+    """
+
+    features_path: str
+    timeseries_path: str
+    lazyload_path: str
+    subject: str
+    seasons: list[str]
+    delay: str
+    window: str
+    random_state: int
+    shuffle_val_data: bool
+    batch_size: int = 1
+    num_workers: int = 0
+
+    # from cneuromax; re-use?
+    #device: An[str, one_of("cpu", "gpu")] = "${config.device}"
+    #shuffle_val_data: bool = True
+    #max_per_device_batch_size: An[int, ge(1)] | None = None
+    #fixed_per_device_batch_size: An[int, ge(1)] | None = None
+    #fixed_per_device_num_workers: An[int, ge(0)] | None = None
+
+
 class VLB_Dataset(Dataset):
-    def __init__(self, config, seasons):
+    def __init__(
+        self: VLB_Dataset,
+        config: VLBDataModuleConfig,
+        seasons: list[str],
+    ) -> None:
         """
         Vision-Language-Brain dataloader for VideoLLaMa2 fine-tuning
         Args:
-            config: VLBDataModuleConfig, datamodule configuration parameters
+            config: datamodule configuration parameters
             seasons: list of str, friends seasons dedicated to a given dataset
         """
         self.config = config
-        self.seasons: list[str] = seasons
+        self.seasons = seasons
         self.ds_file = None
 
         # todo: fix this!
@@ -125,8 +173,7 @@ class VLBDatasets:
         test: Testing dataset.
         predict: Prediction dataset.
     """
-    #config: VLBDataModuleConfig
-    config
+    config: VLBDataModuleConfig
     train: VLB_Dataset | None = None
     val: VLB_Dataset | None = None
     test: VLB_Dataset | None = None
@@ -141,50 +188,6 @@ class VLBDatasets:
         # instantiate lazyloading datasets
         self.val = VLB_Dataset(self.config, val_season)
         self.train = VLB_Dataset(self.config, train_seasons)
-
-
-@dataclass
-class VLBDataModuleConfig:
-    """Holds :class:`VLBDataModuleConfig` config values.
-
-    Args:
-        data_dir: See :paramref:`~.BaseSubtaskConfig.data_dir`.
-        device: See :paramref:`~.FittingSubtaskConfig.device`.
-        shuffle_val_data: Whether to shuffle the validation data\
-            during training.
-        max_per_device_batch_size: See\
-            :attr:`~BaseDataModule.per_device_batch_size`. Sets an\
-            upper bound on the aforementioned attribute.
-        fixed_per_device_batch_size: See\
-            :attr:`~BaseDataModule.per_device_batch_size`. Setting this\
-            value skips the batch size search in\
-            :func:`.find_good_per_device_batch_size` which is\
-            not recommended for resource efficiency.
-        fixed_per_device_num_workers: See\
-            :attr:`~BaseDataModule.per_device_num_workers`. Setting\
-            this value skips the num workers search in\
-            :func:`.find_good_per_device_num_workers` which is\
-            not recommended for resource efficiency.
-    """
-
-    features_path: str
-    timeseries_path: str
-    lazyload_path: str
-    subject: str
-    seasons: list[str]
-    delay: str
-    window: str
-    random_state: int
-    shuffle_val_data: bool
-    batch_size: int = 1
-    num_workers: int = 0
-
-    # from cneuromax; re-use?
-    #device: An[str, one_of("cpu", "gpu")] = "${config.device}"
-    #shuffle_val_data: bool = True
-    #max_per_device_batch_size: An[int, ge(1)] | None = None
-    #fixed_per_device_batch_size: An[int, ge(1)] | None = None
-    #fixed_per_device_num_workers: An[int, ge(0)] | None = None
 
 
 class VLBDataModule(LightningDataModule):
@@ -218,7 +221,7 @@ class VLBDataModule(LightningDataModule):
 
     def __init__(self: "VLBDataModule", config: VLBDataModuleConfig) -> None:
         super().__init__()
-        self.config = config
+        self.config: VLBDataModuleConfig = config
         self.datasets = VLBDatasets(self.config)
 
     @final
