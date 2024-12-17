@@ -105,8 +105,8 @@ class VLB_Dataset(Dataset):
         self.idx_dict = {}
         self.ll_path = self.config.lazyload_path.replace('*', self.config.subject).replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"])
         # load brain timeseries .h5 file
-        b_path = Path(self.config.timeseries_path.replace('*', self.config.subject)).resolve()
-        b_file = h5py.File(b_path, "r")
+        #b_path = Path(self.config.timeseries_path.replace('*', self.config.subject)).resolve()
+        b_file = h5py.File(self.config.timeseries_path, "r")
         ep_keys = {
             run.split("_")[1].split("-")[-1]: (ses, run) for ses, val in b_file.items() for run in val.keys()
         }

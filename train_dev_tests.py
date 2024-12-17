@@ -48,17 +48,17 @@ def train(config: DictConfig) -> None:
     print(config.datamodule.config.subject, config.datamodule.config.random_state)
 
     # Copy timeseries and extracted features .h5 files locally onto slurm (compute node local scratch)
-    subprocess.run(
-        f"rsync -tv --info=progress2 {config.datamodule.config.features_path} $SLURM_TMPDIR/"
-    )
+    #subprocess.run(
+    #    f"rsync -tv --info=progress2 {config.datamodule.config.features_path} {os.environ['SLURM_TMPDIR']}"
+    #)
     #subprocess.run(
     #    f"rsync -tv --info=progress2 {config.datamodule.config.timeseries_path} $SLURM_TMPDIR/"
     #)
-    #features_path = f"{os.environ["SLURM_TMPDIR"]}/{os.path.basename(config.datamodule.config.features_path)}"
-    #timeseries_path = f"{os.environ["SLURM_TMPDIR"]}/{os.path.basename(config.datamodule.config.timeseries_path)}"
+    #config.datamodule.config.features_path = f"{os.environ["SLURM_TMPDIR"]}/{os.path.basename(config.datamodule.config.features_path)}"
+    #config.datamodule.config.timeseries_path = f"{os.environ["SLURM_TMPDIR"]}/{os.path.basename(config.datamodule.config.timeseries_path)}"
     #print(features_path, timeseries_path)
 
-    pl.seed_everything(config.random_state)
+    #pl.seed_everything(config.random_state)
 
     #logger: WandbLogger = instantiate(
     #    config.logger,

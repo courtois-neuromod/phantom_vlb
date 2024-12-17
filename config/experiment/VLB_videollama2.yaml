@@ -8,9 +8,9 @@ datamodule:
       src.datamodule.videollama2_vlb_datamodule.VLBDataModuleConfig
     features_path: ./results/videollama2/lazyloading/friends/friends_*_features.h5
     timeseries_path:
-      "../cneuromod_extract_tseries/outputs/friends/*/func/*_task-friends_space-\
+      "../cneuromod_extract_tseries/outputs/friends/${subject}/func/${subject}_task-friends_space-\
       MNI152NLin2009cAsym_atlas-Schaefer18_desc-1000Parcels7Networks_timeseries.h5"
-    lazyload_path: $SLURM_TMPDIR/friends_*_llFile.h5
+    lazyload_path: $SLURM_TMPDIR/friends_${subject}_llFile.h5
     delay: 3
     window: 3
     seasons: [s01, s02, s04, s05, s06]
@@ -40,6 +40,9 @@ optimizer:
   lr: 1e-3
   weight_decay: 1e-2
 
+hydra:
+  setup:
+    - echo $SLURM_TMPDIR
 
 output_dir: ./results/videollama2/brain_finetune/friends/lightning_ckpt
 
