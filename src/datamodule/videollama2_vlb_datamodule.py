@@ -103,17 +103,20 @@ class VLB_Dataset(Dataset):
         # - concatenate across all runs... sample from it w getitem function
         idx = 0
         self.idx_dict = {}
-        self.ll_path = self.config.lazyload_path.replace('*', self.config.subject).replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"])
+        self.ll_path = self.config.lazyload_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"])
+        #self.ll_path = self.config.lazyload_path.replace('*', self.config.subject).replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"])
+        f_path = self.config.features_path
+
         # load brain timeseries .h5 file
-        #b_path = Path(self.config.timeseries_path.replace('*', self.config.subject)).resolve()
-        b_file = h5py.File(self.config.timeseries_path, "r")
+        b_path = self.config.timeseries_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"])
+        b_file = h5py.File(b_path, "r")
         ep_keys = {
             run.split("_")[1].split("-")[-1]: (ses, run) for ses, val in b_file.items() for run in val.keys()
         }
 
         for s in self.seasons:
 
-            f_path = Path(self.config.features_path.replace('*', f"s{s[-1]}")).resolve()
+            f_path = self.config.features_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"]).replace('*', f"s{s[-1]}")
             epi_list = [
                 x for x in h5py.File(f_path, "r").keys()
             ]
