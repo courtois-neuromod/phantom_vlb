@@ -5,18 +5,20 @@ import subprocess
 from pathlib import Path
 
 import hydra
-import pytorch_lightning as pl
+
+#import pytorch_lightning as pl
 from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate
 
 #from lightning.pytorch.loggers.wandb import WandbLogger
 from omegaconf import DictConfig, OmegaConf
-from pytorch_lightning import Trainer
-from pytorch_lightning.loggers import CometLogger
 
-import wandb
-from src.datamodule import *
-from src.litmodule import *
+#from pytorch_lightning import Trainer
+#from pytorch_lightning.loggers import CometLogger
+#import wandb
+#from src.datamodule import *
+
+#from src.litmodule import *
 
 """
 Sources (adapted from / inspired by):
@@ -55,7 +57,7 @@ def train(config: DictConfig) -> None:
     #timeseries_path = f"{os.environ["SLURM_TMPDIR"]}/{os.path.basename(config.datamodule.config.timeseries_path)}"
     #print(features_path, timeseries_path)
 
-    pl.seed_everything(config.random_state)
+    #pl.seed_everything(config.random_state)
 
     #logger: WandbLogger = instantiate(
     #    config.logger,
