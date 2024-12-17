@@ -45,6 +45,8 @@ def train(config: DictConfig) -> None:
         The validation loss.
     """
     print(OmegaConf.to_yaml(config))
+    print(config.subject, config.random_state)
+    print(config.datamodule.config.subject, config.datamodule.config.random_state)
 
     # Copy timeseries and extracted features .h5 files locally onto slurm (compute node local scratch)
     #subprocess.run(
