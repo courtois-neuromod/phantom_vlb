@@ -16,6 +16,7 @@ from pytorch_lightning.loggers import CometLogger
 
 import wandb
 from src.datamodule import *
+from src.litmodule import *
 
 """
 Sources (adapted from / inspired by):

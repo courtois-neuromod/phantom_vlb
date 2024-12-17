@@ -125,7 +125,7 @@ class VLBDatasets:
         test: Testing dataset.
         predict: Prediction dataset.
     """
-    config: VLBDataModuleConfig = config
+    config: VLBDataModuleConfig
     train: VLB_Dataset | None = None
     val: VLB_Dataset | None = None
     test: VLB_Dataset | None = None
