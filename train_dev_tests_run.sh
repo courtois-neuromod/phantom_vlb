@@ -13,12 +13,12 @@
 # load modules required for your script to work
 module load python/3.10.13
 
-# cactivate project's virtual env
+# activate project's virtual env
 source /home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/vllama2_venv/bin/activate
 
 SUBNUM="sub-${1}"
 FEATURES_PATH="/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/results/videollama2/lazyloading/friends/friends_*_features.h5"
-TIMESERIES_PATH="/home/mstlaure/projects/rrg-pbellec/mstlaure/cneuromod_extract_tseries/outputs/friends/${SUBNUM}/func/sub-${SUBNUM}_task-friends_space-MNI152NLin2009cAsym_atlas-Schaefer18_desc-1000Parcels7Networks_timeseries.h5"
+TIMESERIES_PATH="/home/mstlaure/projects/rrg-pbellec/mstlaure/cneuromod_extract_tseries/outputs/friends/${SUBNUM}/func/${SUBNUM}_task-friends_space-MNI152NLin2009cAsym_atlas-Schaefer18_desc-1000Parcels7Networks_timeseries.h5"
 
 rsync -tv --info=progress2 $FEATURES_PATH $SLURM_TMPDIR/
 rsync -tv --info=progress2 $TIMESERIES_PATH $SLURM_TMPDIR/

@@ -5,19 +5,11 @@ import subprocess
 from pathlib import Path
 
 import hydra
-import pytorch_lightning as pl
 from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate
-
-#from lightning.pytorch.loggers.wandb import WandbLogger
 from omegaconf import DictConfig, OmegaConf
-from pytorch_lightning import Trainer
-from pytorch_lightning.loggers import CometLogger
 
 #import wandb
-from src.datamodule import *
-
-#from src.litmodule import *
 
 """
 Sources (adapted from / inspired by):
@@ -43,9 +35,22 @@ def train(config: DictConfig) -> None:
     Returns:
         The validation loss.
     """
+    # Debugging sanity checks
     print(OmegaConf.to_yaml(config))
     print(config.subject, config.random_state)
     print(config.datamodule.config.subject, config.datamodule.config.random_state)
+
+    # set huggingface home env variable so that model weights are cached and fetched from repo
+    #os.environ['HF_HOME'] = '/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/models/'
+    #os.environ["TRANSFORMERS_CACHE"] = "/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/models"
+    os.environ['HF_HOME'] = config.cache_dir
+    os.environ["TRANSFORMERS_CACHE"] = config.cache_dir
+
+    import pytorch_lightning as pl
+
+    #from lightning.pytorch.loggers.wandb import WandbLogger
+    from pytorch_lightning import Trainer
+    from pytorch_lightning.loggers import CometLogger
 
     # UPDATE / hack : Files now copied in bash command line before launching script
     # Copy timeseries and extracted features .h5 files locally onto slurm (compute node local scratch)
@@ -83,18 +88,18 @@ def train(config: DictConfig) -> None:
     #)
 
     # instantiates datamodule config within datamodule class from config params
-    #datamodule = instantiate(
-    #    config.datamodule,
-    #)
+    datamodule = instantiate(
+        config.datamodule,
+    )
 
-    #litmodule = instantiate(
-    #    config.model,
-    #)
+    litmodule = instantiate(
+        config.litmodule,
+    )
 
-    #trainer = Trainer(
-    #    logger=[logger],
-        # ...configs
-    #)
+    trainer = Trainer(
+        logger=[logger],
+         **config.trainer,
+    )
 
     #trainer.fit(model=litmodule, datamodule=datamodule)
 

@@ -59,8 +59,8 @@ class VLBDataModuleConfig:
     lazyload_path: str
     subject: str
     seasons: list[str]
-    delay: str
-    window: str
+    delay: int
+    window: int
     random_state: int
     shuffle_val_data: bool
     batch_size: int = 1
@@ -79,6 +79,7 @@ class VLB_Dataset(Dataset):
         self: "VLB_Dataset",
         config: VLBDataModuleConfig,
         seasons: list[str],
+        set_name: str,
     ) -> None:
         """
         Vision-Language-Brain dataloader for VideoLLaMa2 fine-tuning
@@ -89,6 +90,7 @@ class VLB_Dataset(Dataset):
         self.config = config
         self.seasons = seasons
         self.ds_file = None
+        self.set_name = set_name
 
         # todo: fix this!
         # implement function that builds datamatrices for predictor features and output target features
@@ -101,52 +103,54 @@ class VLB_Dataset(Dataset):
         # - remove excedent TRs of video frames input features at the tail END
         # - truncate or pad tail end of language features to match length of timeseries
         # - concatenate across all runs... sample from it w getitem function
-        idx = 0
-        self.idx_dict = {}
-        self.ll_path = self.config.lazyload_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"])
-        #self.ll_path = self.config.lazyload_path.replace('*', self.config.subject).replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"])
-        f_path = self.config.features_path
+        self.ll_path = self.config.lazyload_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"]).replace('*', f"{self.set_name}")
+        #f_path = self.config.features_path
 
-        # load brain timeseries .h5 file
-        b_path = self.config.timeseries_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"])
-        b_file = h5py.File(b_path, "r")
-        ep_keys = {
-            run.split("_")[1].split("-")[-1]: (ses, run) for ses, val in b_file.items() for run in val.keys()
-        }
+        if not Path(self.ll_path).exists():
+            """
+            Build dataset's lazy loading file
+            """
+            idx = 0
+            # load brain timeseries .h5 file
+            b_path = self.config.timeseries_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"])
+            b_file = h5py.File(b_path, "r")
+            ep_keys = {
+                run.split("_")[1].split("-")[-1]: (ses, run) for ses, val in b_file.items() for run in val.keys()
+            }
 
-        for s in self.seasons:
+            for s in self.seasons:
 
-            f_path = self.config.features_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"]).replace('*', f"s{s[-1]}")
-            epi_list = [
-                x for x in h5py.File(f_path, "r").keys()
-            ]
+                f_path = self.config.features_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"]).replace('*', f"s{s[-1]}")
+                epi_list = [
+                    x for x in h5py.File(f_path, "r").keys()
+                ]
 
-            for ep_num in epi_list:
-                if ep_num in ep_keys:
-                    ses, run = ep_keys[ep_num]
-                    run_tseries = np.array(b_file[ses][run])[(self.config.window-1)+self.config.delay:]
+                for ep_num in epi_list:
+                    if ep_num in ep_keys:
+                        ses, run = ep_keys[ep_num]
+                        run_tseries = np.array(b_file[ses][run])[(self.config.window-1)+self.config.delay:]
 
-                    run_vision = np.array(h5py.File(f_path, "r")[ep_num]['video_features'])[(self.config.window-1):]
-                    run_language = np.array(h5py.File(f_path, "r")[ep_num]['transcript_features'])[(self.config.window-1):]
+                        run_vision = np.array(h5py.File(f_path, "r")[ep_num]['video_features'])[(self.config.window-1):]
+                        run_language = np.array(h5py.File(f_path, "r")[ep_num]['transcript_features'])[(self.config.window-1):]
 
-                    n_rows = np.min(
-                        (run_tseries.shape[0], run_vision.shape[0], run_language.shape[0]),
-                    )
+                        n_rows = min(
+                            (run_tseries.shape[0], run_vision.shape[0], run_language.shape[0]),
+                        )
 
-                    for n in range(n_rows):
-                        with h5py.File(self.ll_path, "a") as f:
-                            group = f.create_group(f"{idx}")
-                            group.create_dataset(
-                                f"{idx}_timeseries", data=run_tseries[n],
-                            )
-                            group.create_dataset(
-                                f"{idx}_vision", data=run_vision[n],
-                            )
-                            group.create_dataset(
-                                f"{idx}_language", data=run_language[n],
-                            )
+                        for n in range(n_rows):
+                            with h5py.File(self.ll_path, "a") as f:
+                                group = f.create_group(f"{idx}")
+                                group.create_dataset(
+                                    f"{idx}_timeseries", data=run_tseries[n],
+                                )
+                                group.create_dataset(
+                                    f"{idx}_vision", data=run_vision[n],
+                                )
+                                group.create_dataset(
+                                    f"{idx}_language", data=run_language[n],
+                                )
 
-                        idx += 1
+                            idx += 1
 
         with h5py.File(self.ll_path, "r") as f:
             self.length = max([int(s) for s in f.keys()]) + 1
@@ -160,6 +164,8 @@ class VLB_Dataset(Dataset):
         item = {}
         for mod in ['timeseries', 'vision', 'language']:
             item[mod] = torch.from_numpy(np.array(self.ds_file[f"{idx}"][f"{idx}_{mod}"])).float()
+        item['vision'] = [(item['vision'], 'video')]
+
         return item
 
 
@@ -189,8 +195,8 @@ class VLBDatasets:
             s for s in self.config.seasons if s not in val_season
         ]
         # instantiate lazyloading datasets
-        self.val = VLB_Dataset(self.config, val_season)
-        self.train = VLB_Dataset(self.config, train_seasons)
+        self.val = VLB_Dataset(self.config, val_season, "val")
+        self.train = VLB_Dataset(self.config, train_seasons, "train")
 
 
 class VLBDataModule(LightningDataModule):

@@ -2,15 +2,15 @@
 
 datamodule:
   _target_:
-    src.datamodule.videollama2_vlb_datamodule.VLBDataModule
+    src.datamodule.VLBDataModule
   config:
     _target_:
-      src.datamodule.videollama2_vlb_datamodule.VLBDataModuleConfig
+      src.datamodule.VLBDataModuleConfig
     features_path: $SLURM_TMPDIR/friends_*_features.h5
     timeseries_path:
       "$SLURM_TMPDIR/${subject}_task-friends_space-\
       MNI152NLin2009cAsym_atlas-Schaefer18_desc-1000Parcels7Networks_timeseries.h5"
-    lazyload_path: $SLURM_TMPDIR/friends_${subject}_llFile.h5
+    lazyload_path: $SLURM_TMPDIR/friends_${subject}_*_llFile.h5
     delay: 3
     window: 3
     seasons: [s01, s02, s04, s05, s06]
@@ -22,23 +22,22 @@ datamodule:
 
 litmodule:
   _target_:
-    src.litmodule.videollama2_vlb_litmodule.VLBLitModule
+    src.litmodule.VLBLitModule
   config:
     _target_:
-      src.litmodule.videollama2_vlb_litmodule.VLBLitModuleConfig
+      src.litmodule.VLBLitModuleConfig
     model_type: videollama2
     model_path: mistralai/Mistral-7B-Instruct-v0.2
     pretrain_mm_mlp_adapter: DAMO-NLP-SG/VideoLLaMA2-7B-Base/mm_projector.bin
     freeze_backbone: False
-
-# https://pytorch.org/docs/stable/generated/torch.optim.AdamW
-optimizer:
-  _target_: torch.optim.AdamW
-  _partial_: True  # https://hydra.cc/docs/advanced/instantiate_objects/overview/
-  betas: [0.9, 0.999]
-  eps: 1e-08
-  lr: 1e-3
-  weight_decay: 1e-2
+    vision_tower: openai/clip-vit-large-patch14-336
+    lr: 1e-3
+    betas: [0.9, 0.999]
+    eps: 1e-08
+    weight_decay: 1e-2
+    lr_scheduler_name: CosineAnnealingLR
+    last_epoch: -1
+    t_max: 50000
 
 output_dir: ./results/videollama2/brain_finetune/friends/lightning_ckpt
 

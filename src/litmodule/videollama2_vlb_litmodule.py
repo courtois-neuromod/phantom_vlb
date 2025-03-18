@@ -2,24 +2,29 @@ import argparse
 import math
 
 import numpy as np
+import torch
 from hydra.utils import instantiate
 from lightning.pytorch import LightningModule
-import torch
-from transformers import PretrainedConfig, AutoTokenizer, AutoModelForCausalLM, AutoConfig, BitsAndBytesConfig
-
+from torch.optim import Adam, AdamW, lr_scheduler
+from transformers import (
+    AutoConfig,
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    BitsAndBytesConfig,
+    PretrainedConfig,
+)
 
 sys.path.append('../../')
 
-from VideoLLaMA2.videollama2.model.videollama2_mistral import (
-    Videollama2MistralForCausalLM,
-    Videollama2MistralConfig,
-)
-
-from VideoLLaMA2.videollama2.mm_utils import get_model_name_from_path
 from VideoLLaMA2.videollama2.constants import (
     DEFAULT_IMAGE_TOKEN,
     DEFAULT_VIDEO_TOKEN,
     MODAL_INDEX_MAP,
+)
+from VideoLLaMA2.videollama2.mm_utils import get_model_name_from_path
+from VideoLLaMA2.videollama2.model.videollama2_mistral import (
+    Videollama2MistralConfig,
+    Videollama2MistralForCausalLM,
 )
 
 NUM_FRAMES = 12  # (must match lazyloading... 3TRs and 4 frames per TR); higher than default of 8 in vllama2's CONSTANTS
@@ -51,8 +56,10 @@ def load_pretrained_vllama2(
         config=model_config,
         torch_dtype=torch.bfloat16,
         do_sample=True,
+        cache_dir=config.cache_dir,
+        #vision_tower=config.vision_tower,  # path to load clip vision tower clips locally
     )
-    model.config.use_cache = False
+    model.config.use_cache = True
 
     if config.freeze_backbone:
         model.model.requires_grad_(False)
@@ -87,6 +94,13 @@ class VLBLitModuleConfig:
     model_path: str
     pretrain_mm_mlp_adapter: str
     freeze_backbone: bool
+    lr: float
+    betas: list[float]
+    eps: float
+    weight_decay: float
+    lr_scheduler_name: str
+    last_epoch: int
+    t_max: int
 
     def __post_init__(self):
         self.dtype = torch.float16
@@ -94,22 +108,137 @@ class VLBLitModuleConfig:
 
 
 class VLBLitModule(LightningModule):
-    """."""
+    """
+    Required methods are forward, training_step and configure_optimizers
+    Source: https://lightning.ai/docs/pytorch/LTS/common/lightning_module.html#starter-example
 
-    def __init__(self: "VLBLitModule", config: VLBLitModuleConfig) -> None:
+    example from FP
+    https://github.com/courtois-neuromod/video_transformer/blob/main/src/videogpt/vqvae.py
+    """
+
+    def __init__(
+        self: "VLBLitModule",
+        config: VLBLitModuleConfig,
+    ) -> None:
         super().__init__()
 
-        self.config = config
-
+        self.config: VLBLitModuleConfig = config
         self.nnmodule = load_pretrained_vllama2(self.config)
+        #self.hrf_layer
+        #self.ridge_layer
 
-        self.optimizer = instantiate(
-            config.optimizer,
+        # https://github.com/courtois-neuromod/phantom_LLM/blob/7258a5e95fe256d9ae4669dc5a1ca1be34a0d867/phantom_LLM/src/models/ridge_align.py#L76
+
+
+    def forward(self, x_video, x_lang, attention_mask=None, hrf_weights=None):
+        """."""
+        # https://github.com/courtois-neuromod/phantom_LLM/blob/7258a5e95fe256d9ae4669dc5a1ca1be34a0d867/phantom_LLM/src/models/ridge_align.py#L76
+
+        # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/c0bb03abf6b8a6b9a8dccac006fb4db5d4d9e414/videollama2/model/videollama2_llama.py#L61
+        outputs = self.nnmodule(
+            input_ids = x_lang,
+            attention_mask = attention_mask,
+            output_hidden_states=True,
+            images=x_video,
         )
-        optimizer(params=self.parameters())
-        self.lrscheduler = lrscheduler(optimizer=self.optimizer)
+        hidden_states = outputs.last_hidden_state
+
+        # Apply HRF Convolution
+        hrf_embeddings = self.hrf_layer(hidden_states, hrf_weights).squeeze(1)
+
+        # Remove the singleton dimension
+        hrf_embeddings = hrf_embeddings.squeeze(-1)
+        # print(f"HRF embeddings shape after squeeze: {hrf_embeddings.shape}")
+
+        # Apply Ridge Regression
+        regression_output = self.ridge_layer(hrf_embeddings)
+        # print(f"Ridge Regression output shape: {regression_output.shape}")
+
+        return regression_output
 
 
-    def training_step(
+    def training_step(self, batch):
+        # TODO: how to deal w batch structure from data module??
+        """
+        Note: the DataLoader creates batches based on Dataset's __getitems__
+        If it returns tensors, then those are stacked
+        If it returns a dictionary, items get stacked under each key, and can
+        get called by that key from a batch dictionary. E.g. here "timeseries", "vision", "language"
+        """
+        y = batch["timeseries"].cuda()  # dim = (batch_size, 1000,) dtype = torch.float32
 
-    ):
+        # batch["vision"]: # list[tuple] of len == batch size
+        # each tuple in the list is (tensor , 'video'),
+        # where tensor is (dim = (12, 3, 336, 336), dtype = torch.float32)
+
+        # videollama2 inference
+        # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/__init__.py#L32
+        # image_or_video (torch.Tensor): image tensor (1, C, H, W) / video tensor (T, C, H, W).
+        #x_video = torch.tensor(batch["vision"], dtype=torch.long).half().cuda()
+        x_video = [(k.half().cuda(), v) for (k, v) in batch["vision"].items()]
+
+        #x_video = batch["vision"].half().cuda()  # dim = (12, 3, 336, 336), dtype = torch.float32
+        # TODO: determine if .half() to torch.float16 is just for inference or also for training...
+        #x_video = [(x_video, 'video')]
+
+        #x_lang = batch["language"].unsqueeze(0).long().cuda()
+        x_lang = batch["language"].long().cuda()  # tensor dim = (batch_size, num_feat,) dtype = torch.float32
+
+        #x_lang = torch.tensor(
+        #    batch["language"],
+        #    dtype=torch.long
+        #).unsqueeze(0).long().cuda(),
+
+        # from: attention_masks = input_ids.ne(tokenizer.pad_token_id).long().cuda()
+        #attention_masks = x_lang.ne(tokenizer.pad_token_id).long().cuda()
+        # tokenizer.pad_token == tokenizer.unk_token = '<unk>'
+        # tokenizer.pad_token_id == 0
+        attention_mask = x_lang.ne(0).long().cuda()
+
+        output = self.forward(
+             x_video,
+             x_lang,
+             attention_mask = attention_mask,
+        )
+        # prepare input ids for multimodal
+        # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/c0bb03abf6b8a6b9a8dccac006fb4db5d4d9e414/videollama2/model/videollama2_arch.py#L161
+
+        # TODO: output loss function
+
+    def configure_optimizers(
+        self: "VLBLitModule",
+    ) -> tuple[list[Optimizer], list[dict[str, LRScheduler | str | int]]]:
+        """.
+        see also:
+        https://github.com/courtois-neuromod/video_transformer/blob/0906e9a71a2fdb511190f7a757c8aadcb1f6c990/src/videogpt/vqvae_ba.py#L165
+
+        Returns:
+            A tuple containing the PyTorch ``Optimizer`` and
+            ``LRScheduler`` instance attributes (each nested in a
+            list).
+        """
+        # https://hydra.cc/docs/advanced/instantiate_objects/overview/
+        # https://pytorch.org/docs/stable/generated/torch.optim.AdamW
+        self.optimizer = AdamW(
+            params=self.parameters(),
+            lr = self.config.lr,
+            betas = self.config.betas,
+            eps = self.config.eps,
+            weight_decay = self.config.weight_decay,
+        )
+
+        self.lr_scheduler_args = {
+            "last_epoch": self.config.last_epoch,
+            "T_max": self.config.t_max,
+        }
+        self.scheduler = getattr(lr_scheduler, self.config.lr_scheduler_name)(
+            self.optimizer, **self.lr_scheduler_args
+        )
+
+        return [self.optimizer], [
+            {
+                "scheduler": self.scheduler,
+                "interval": "step",
+                "frequency": 1,
+            },
+        ]
