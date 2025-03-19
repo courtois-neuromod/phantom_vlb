@@ -32,7 +32,6 @@ python videollama2_vlb_lazyloading.py \
     --window_max_length 1900 \
     --add_syst_message True \
     --bf16 True \
-    --image_aspect_ratio pad \
     --frames_per_tr 4 \
     --tr 1.49 \
     --window_duration 3 \
