@@ -1,17 +1,32 @@
 """
-TODO:
-Step1: implement prepocessing steps to build .h5 of input data from vision & language input...
-Current script
+This script preprocesses raw vision (movie frames) and language (movie transcripts) input from the CNeuroMod Friends dataset
+to implement lazy loading in order to fine-tune VideoLLaMA2 on brain imaging data (fMRI).
 
-Step 2: implement my own Dataset class w __getitem__ and __len__
-TODO: adapt from data module dataset (LazySupervisedDataset)'s __getitem__ to preprocess video chunks per TRs
-determine start and duration of video frame window for each target TR
+The target VideoLLaMA2 model is the pre-trained DAMO-NLP-SG/VideoLLaMA2-7B with a mistral 7B language model and clip vision tower.
+
+Preprocessed text and video frames (input features) are produced per fMRI TR (1.49s).
+They are saved in a .h5 file to support lazy loading to speed up fine-tuning.
+
+The processing steps are adapted from the VideoLLaMA2 datamodule dataset class LazySupervisedDataset's __getitem__ function.
+- movie frames are processed with the pre-trained CLIP vision tower's processor
+- text is formatted and tokenized with the DAMO-NLP-SG/VideoLLaMA2-7B tokenizer
+
+For each TR, movie frames have a short temporal window (default of 3 TRs = 4.47s). Text has a long window, reaching back from the target TR until the episode onset or the model's maximal lenght of input tokens.
+
+Adapted from
 https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L387
 https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L315
 
-Step 3: implement datamodule
+# TODO: (future step) add audio stream using video-llama2's audio branch
+https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/audio_visual/videollama2/train.py
 
-# TODO: (down the road) add audio branch to video-llama2
+Just here as a reference to help select videoframe sampling frequency
+Values from
+https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/constants.py#L20
+
+NUM_FRAMES = 8
+MAX_FRAMES = 32
+NUM_FRAMES_PER_SECOND = 1
 """
 
 import argparse
@@ -24,39 +39,10 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pandas as pd
-import torch
-import torch.nn as nn
-import transformers
-from decord import VideoReader, cpu
-from numpy.lib.stride_tricks import sliding_window_view
-from PIL import Image
-from torch.utils.data import DataLoader, Dataset
-from tqdm import tqdm
-
-sys.path.append('../../')
-
-from VideoLLaMA2.videollama2.mm_utils import (
-    expand2square,
-    frame_sample,
-    tokenizer_multimodal_token,
-)
-from VideoLLaMA2.videollama2.model.encoder import CLIPVisionTower
-
-"""
-Just here as a reference to help pick videoframe sampling frequency
-Values from
-https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/constants.py#L20
-"""
-NUM_FRAMES = 8
-MAX_FRAMES = 32
-NUM_FRAMES_PER_SECOND = 1
 
 
 def get_arguments():
-    """
-    Params adapted from videollama2 dataclass : https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L71
-    Default parameters from : https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/scripts/custom/finetune.sh#L45
-    """
+    """."""
     parser = argparse.ArgumentParser(
         description="Compile parameters for input feature lazy_loading for VideoLLaMa2"
     )
@@ -70,10 +56,13 @@ def get_arguments():
         '--lazy_load_path', required=True, type=str, help='Path where to save the processed features in an .h5 output file.'
     )
     parser.add_argument(
+        '--cache_dir', type=str, default="../../models", help='Directory where pre-trained model weights are downloaded.'
+    )
+    parser.add_argument(
         '--model_type', type=str, default='videollama2', choices=['videollama2', 'videollama2_llama', 'videollama2_mistral', 'videollama2_mixtral', 'videollama2_qwen2'], help='Model type selected from list.'
     )
     parser.add_argument(
-        '--model_path', type=str, default='mistralai/Mistral-7B-Instruct-v0.2',
+        '--model_path', type=str, default='DAMO-NLP-SG/VideoLLaMA2-7B', choices=['mistralai/Mistral-7B-Instruct-v0.2', 'DAMO-NLP-SG/VideoLLaMA2-7B'],
     )
     parser.add_argument(
         '--model_max_length', type=int, default=2048,
@@ -82,39 +71,16 @@ def get_arguments():
         '--window_max_length', type=int, default=2020,
     )
     parser.add_argument(
-        '--multimodal_token_index', type=int, default=-201,
-    )
-    parser.add_argument(
-        '--vision_tower', type=str,
-        #default='openai/clip-vit-large-patch14-336',  # requires internet access
-        default='../models/vision_tower/openai/clip-vit-large-patch14-336',  # locally saved copy
-    )
-    parser.add_argument(
-        '--mm_vision_select_layer', type=int, default=-2,
-    )
-    parser.add_argument(
-        '--mm_vision_select_feature', type=str, default='patch',
+        '--add_syst_message', type=bool, default=False,
     )
     parser.add_argument(
         '--bf16', type=bool, default=True,
     )
     parser.add_argument(
-        '--device', type=int, default=0,
-    )
-    parser.add_argument(
-        '--image_aspect_ratio', type=str, default='pad',
-    )
-    parser.add_argument(
         '--frames_per_tr', type=int, default=4,
     )
-    #parser.add_argument(
-    #    '--num_frames', type=int, default=8,
-    #)
     parser.add_argument(
         '--tr', type=float, default=1.49,
-    )
-    parser.add_argument(
-        '--bits', type=int, default=16,
     )
     parser.add_argument(
         '--window_duration', type=int, default=3, help='number of TRs worth of video frames included in prediction window',
@@ -123,7 +89,9 @@ def get_arguments():
 
 
 def get_input_paths(ll_args):
-
+    """
+    Return dict of paths for available transcript and video files, per episode
+    """
     transcript_path = str(Path(ll_args.input_transcript_path).resolve())
     video_path = str(Path(ll_args.input_video_path).resolve())
 
@@ -135,6 +103,7 @@ def get_input_paths(ll_args):
                 'transcript': tr_file,
                 'video': f'{video_path}/friends_{ep_num}.mkv',
             }
+
     return input_paths
 
 
@@ -156,26 +125,29 @@ def get_done_ep(lazyload_path):
 
 def prep_video_processor(ll_args):
     """
+    Instantiate the pre-trained vision tower (CLIP)'s processor to preprocess raw video frames.
+
     Adapted from:
     https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L510
     https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/scripts/custom/finetune.sh#L45
     https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/model/videollama2_arch.py#L43
     https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/model/encoder.py#L12
+    https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/model/__init__.py
 
-    VideoLLaMA2 has a vision tower, which is a pre-trained encoder from OpenAI's Clip (weights are frozen during fine-tuning)
-    The VideoLLaMA2 datamodule has a dataset that, with __getitem__, processes a video through the vision tower (nn.Module's forward)
-    before handing it over to the datamodule that gives batches to the main model.
+    VideoLLaMA2 has a vision tower, which is a pre-trained encoder from OpenAI's Clip model (weights are frozen during pre-training and fine-tuning)
+    The VideoLLaMA2 datamodule has a dataset whose __getitem__ function processes raw video input through its vision tower (nn.Module's forward)
+    before passing it to the datamodule that feeds batches to the main model.
 
-    Here, with lazy-loading, I'm processing each video in advance through the vision tower and storing its features as .h5
-    for lazy loading to speed up processing
+    Here, we are processing each video in advance through the vision tower and storing its features as .h5
+    to speed up fine-tuning using lazy loading.
 
-    From FP's video_transformer, decide on the window of video (here n = 3 TRs) to pair w a given target TR
-
-    Configs are split into data classes (model, training and data) in train script, and specified in finteune script:
+    Note: VLLaMA2 config params are split into three data classes (model, training and data) in the train script.
+    E.g., they are specified in the finteune script here:
     https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/main/scripts/custom/finetune.sh#L45
     """
+    mm_config = transformers.AutoConfig.from_pretrained(ll_args.model_path)
 
-    vision_tower = CLIPVisionTower(ll_args.vision_tower, args=ll_args)
+    vision_tower = build_vision_tower(mm_config)
 
     vision_tower.to(dtype=torch.bfloat16 if ll_args.bf16 else torch.float16, device=ll_args.device)
 
@@ -188,15 +160,15 @@ def prep_video_processor(ll_args):
 
 def prep_tokenizer(ll_args):
     """
+    Instantiate the pre-trained model's tokenizer to save input text as int arrays
+
     https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L494
+    https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/model/__init__.py#L165C9-L165C91
     """
     tokenizer = transformers.AutoTokenizer.from_pretrained(
         ll_args.model_path,
-        model_max_length=ll_args.model_max_length,
-        padding_side="right",
         use_fast=True,
         truncate=False,
-        #token=access_token,  # just needed first time
     )
 
     if tokenizer.pad_token is None:
@@ -205,8 +177,9 @@ def prep_tokenizer(ll_args):
     return tokenizer
 
 
-def prep_text(text, tokenizer, window_max_length):
+def prep_text(text, tokenizer, window_max_length, add_syst_message=False):
     """
+    Tokenizes raw input text
     Adapted from
     https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L168
     https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/mm_utils.py#L289
@@ -227,11 +200,22 @@ def prep_text(text, tokenizer, window_max_length):
         tokens = tokens[-window_max_length:]
     text = tokenizer.convert_tokens_to_string(tokens)
 
-    # Text Prep:
+    # Text Prep
     # pass text through .strip() to remove extra white spaces,
     # add modal token to begining of input text for each entry
     modal_token = "<video>"
     message = [{'role': 'user', 'content': modal_token + '\n' + text.strip()}]
+
+    # Not certain if this step is helpful or needed...
+    if add_syst_message:
+        system_message = [
+            {'role': 'system', 'content': (
+            """<<SYS>>\nYou are shown frames from a 5s clip taken from an episode of the TV show Friends. For context, the user is giving you a transcription of the dialogue spoken between the characters in that episode, up until the segment that corresponds to the video frames you are given."""
+            """\n"""
+            """Please do your best to understand what happens in the video frames you are shown, as a function of the story that is unfolding in the episode.\n<</SYS>>""")
+            }
+        ]
+        message = system_message + message
 
     prompt = tokenizer.apply_chat_template(message, tokenize=False, add_generation_prompt=False)
 
@@ -243,8 +227,7 @@ def prep_text(text, tokenizer, window_max_length):
 
 def load_video(video_path, tr = 1.49):
     """
-    TODO: adapt to break video into chunks of frames assigned to a TR
-    Source:
+    Adapted from
     https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/mm_utils.py#L133
     """
     vreader = VideoReader(video_path, ctx=cpu(0), num_threads=1)
@@ -259,8 +242,9 @@ def load_video(video_path, tr = 1.49):
     return vreader, fps, num_frames, duration, tr_list.tolist()
 
 
-def extract_video_chunk(vreader, processor, end_time, win_dur, fps, num_frames_of_video, tr, frames_per_tr, aspect_ratio):
+def extract_video_chunk(vreader, processor, end_time, win_dur, fps, num_frames_of_video, tr, frames_per_tr):
     """
+    Tokenizes raw video frames
     Adapted from:
     https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/mm_utils.py#L133
     """
@@ -283,37 +267,32 @@ def extract_video_chunk(vreader, processor, end_time, win_dur, fps, num_frames_o
         #video_data.append(Image.fromarray(np.zeros((*video_data[-1].size, 3), dtype=np.uint8)))
         video_data.append(Image.fromarray(np.swapaxes(np.zeros((*video_data[-1].size, 3), dtype=np.uint8), 0, 1)))
 
-    if aspect_ratio == 'pad':
-        images = [expand2square(f, tuple(int(x*255) for x in processor.image_mean)) for f in video_data]
-        #video = processor.preprocess(images, return_tensors='pt')['pixel_values']
-        video = np.array(processor.preprocess(images)['pixel_values'])
-    else:
-        images = [f for f in video_data]
-        #video = processor.preprocess(images, return_tensors='pt')['pixel_values']
-        video = np.array(processor.preprocess(images)['pixel_values'])
+    images = [expand2square(f, tuple(int(x*255) for x in processor.image_mean)) for f in video_data]
+    #video = processor.preprocess(images, return_tensors='pt')['pixel_values']
+    video = np.array(processor.preprocess(images)['pixel_values'])
+
     return video
 
 
 def make_lazy_loading_videollama2(ll_args):
     """
-    Support function to preprocess input data (language and video frames) into
-    pre-saved features for lazy loading during multimodal brain alignment
-    experiments with video-LLaMA2.
+    Preprocesses input data (language and video frames) into
+    tokenized input features for lazy loading during multimodal brain alignment
+    experiments with VideoLLaMA2.
 
     Script to be ran separately ahead of training / testing / validation,
     for each season of Friends.
 
     Output is a HDF5 file to be used by a dataloader for lazy loading.
-    For each modality, have one row corresponding of features correspond to a single TR
+    For each modality, each row of features corresponds to a single fMRI TR (1.49s)
 
-    This script is adapted from
+    This script is adapted from F. Paugam's video transformer scripts
     https://github.com/courtois-neuromod/video_transformer/blob/0906e9a71a2fdb511190f7a757c8aadcb1f6c990/src/datasets/replay_datamodule.py#L125
 
-    The video and text data pre-processing steps are adapted from video-LLaMA2
+    The video and text data pr-processing steps are adapted from video-LLaMA2
     https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/main/videollama2/train.py
     """
     print(ll_args)
-
 
     ll_args.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -325,8 +304,6 @@ def make_lazy_loading_videollama2(ll_args):
     ll_args = prep_video_processor(ll_args)
     tokenizer = prep_tokenizer(ll_args)
 
-    #print(input_file_paths)
-
     for ep_num, in_paths in tqdm(input_file_paths.items(), desc='Processing season episodes'):
 
         if ep_num not in done_epnum:
@@ -337,8 +314,8 @@ def make_lazy_loading_videollama2(ll_args):
             for i in range(transcript.shape[0]):
                 if not pd.isnull(transcript["text_per_tr"][i]):
                     text_chunk += str(transcript["text_per_tr"][i])
-                    # TODO: run some sanity checks to validate truncating side (from the left)
-                text_ids = prep_text(text_chunk, tokenizer, ll_args.window_max_length)
+                    # DONE: run some sanity checks to validate truncating side (from the left)
+                text_ids = prep_text(text_chunk, tokenizer, ll_args.window_max_length, ll_args.add_syst_message)
                 transcript_tokens.append(
                     np.pad(
                         text_ids, (0, (ll_args.model_max_length + 1)-len(text_ids))
@@ -369,7 +346,6 @@ def make_lazy_loading_videollama2(ll_args):
                     num_frames,
                     ll_args.tr,
                     ll_args.frames_per_tr,
-                    ll_args.image_aspect_ratio,
                 ))
 
             with h5py.File(ll_path, "a") as f:
@@ -387,5 +363,23 @@ def make_lazy_loading_videollama2(ll_args):
 if __name__ == "__main__":
 
     args = get_arguments()
+
+    os.environ['HF_HOME'] = args.cache_dir
+    os.environ["TRANSFORMERS_CACHE"] = args.cache_dir
+
+    import torch
+    import transformers
+    from decord import VideoReader, cpu
+    from PIL import Image
+    from tqdm import tqdm
+
+    sys.path.append('../../')
+    from VideoLLaMA2.videollama2.mm_utils import (
+        expand2square,
+        frame_sample,
+        tokenizer_multimodal_token,
+    )
+    from VideoLLaMA2.videollama2.model.encoder import build_vision_tower
+
 
     make_lazy_loading_videollama2(args)

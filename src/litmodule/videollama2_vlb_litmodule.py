@@ -1,5 +1,7 @@
 import argparse
 import math
+import sys
+from dataclasses import dataclass
 
 import numpy as np
 import torch
@@ -43,7 +45,9 @@ def load_pretrained_vllama2(
     model_config = Videollama2MistralConfig.from_pretrained(config.model_path, trust_remote_code=True)
     #model_config = AutoConfig.from_pretrained(config.model_path)
 
-    model_config._attn_implementation = "flash_attention_2"
+    #model_config._attn_implementation = "flash_attention_2"
+    #config._attn_implementation = None
+    model_config._attn_implementation = "sdpa"
 
     model_type = config.model_type
     is_pretraining = False  # config.tune_mm_mlp_adapter
@@ -56,7 +60,6 @@ def load_pretrained_vllama2(
         config=model_config,
         torch_dtype=torch.bfloat16,
         do_sample=True,
-        cache_dir=config.cache_dir,
         #vision_tower=config.vision_tower,  # path to load clip vision tower clips locally
     )
     model.config.use_cache = True
@@ -105,6 +108,7 @@ class VLBLitModuleConfig:
     def __post_init__(self):
         self.dtype = torch.float16
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device_map="auto"
 
 
 class VLBLitModule(LightningModule):

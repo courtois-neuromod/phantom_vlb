@@ -16,27 +16,23 @@ module load python/3.10.13
 # cactivate project's virtual env
 source /home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/vllama2_venv/bin/activate
 
-DATA_DIR="../../algonauts_dset/competitors"
-OUTP_DIR="../results/videollama2/lazyloading/friends"
+DATA_DIR="../../../algonauts_dset/competitors"
+OUTP_DIR="../../results/videollama2/lazyloading/friends"
 SEASON="${1}"
 
 # --num_frames 8 \
 python videollama2_vlb_lazyloading.py \
     --input_transcript_path "${DATA_DIR}/stimuli/transcripts/friends/${SEASON}" \
-    --input_video_path "../../friends_algonauts/data/friends.stimuli/${SEASON}" \
+    --input_video_path "../../../friends_algonauts/data/friends.stimuli/${SEASON}" \
     --lazy_load_path "${OUTP_DIR}/friends_${SEASON}_features.h5" \
+    --cache_dir "../../models" \
     --model_type videollama2 \
-    --model_path mistralai/Mistral-7B-Instruct-v0.2 \
+    --model_path DAMO-NLP-SG/VideoLLaMA2-7B \
     --model_max_length 2048 \
-    --window_max_length 2020 \
-    --multimodal_token_index -201 \
-    --vision_tower ../models/vision_tower/openai/clip-vit-large-patch14-336 \
-    --mm_vision_select_layer -2 \
-    --mm_vision_select_feature patch \
+    --window_max_length 1900 \
+    --add_syst_message True \
     --bf16 True \
-    --device 0 \
     --image_aspect_ratio pad \
     --frames_per_tr 4 \
     --tr 1.49 \
-    --bits 16 \
     --window_duration 3 \
