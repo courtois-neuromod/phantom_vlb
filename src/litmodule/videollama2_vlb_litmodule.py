@@ -1,29 +1,31 @@
-import argparse
-import math
+#import argparse
+#import math
 import sys
 from dataclasses import dataclass
 
-import numpy as np
+#import numpy as np
 import torch
-from hydra.utils import instantiate
+
+#from hydra.utils import instantiate
 from lightning.pytorch import LightningModule
 from torch.optim import Adam, AdamW, lr_scheduler
-from transformers import (
-    AutoConfig,
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    BitsAndBytesConfig,
-    PretrainedConfig,
-)
+
+#from transformers import (
+#    AutoConfig,
+#    AutoModelForCausalLM,
+#    AutoTokenizer,
+#    BitsAndBytesConfig,
+#    PretrainedConfig,
+#)
 
 sys.path.append('../../')
 
-from VideoLLaMA2.videollama2.constants import (
-    DEFAULT_IMAGE_TOKEN,
-    DEFAULT_VIDEO_TOKEN,
-    MODAL_INDEX_MAP,
-)
-from VideoLLaMA2.videollama2.mm_utils import get_model_name_from_path
+#from VideoLLaMA2.videollama2.constants import (
+#    DEFAULT_IMAGE_TOKEN,
+#    DEFAULT_VIDEO_TOKEN,
+#    MODAL_INDEX_MAP,
+#)
+#from VideoLLaMA2.videollama2.mm_utils import get_model_name_from_path
 from VideoLLaMA2.videollama2.model.videollama2_mistral import (
     Videollama2MistralConfig,
     Videollama2MistralForCausalLM,
@@ -39,41 +41,42 @@ def load_pretrained_vllama2(
     sources (old branch):
     https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/3fa0ea5d33ee66a9915c43443ea5e9b19bb0c66e/videollama2/model/__init__.py#L48
     https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py
+    https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/scripts/custom/finetune.sh
+    https://arxiv.org/pdf/2406.07476
+
+    TODO implement Lora...
+    https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/3fa0ea5d33ee66a9915c43443ea5e9b19bb0c66e/videollama2/model/__init__.py#L87
     """
-    model_name = get_model_name_from_path(config.model_path)
+    model_config = Videollama2MistralConfig.from_pretrained(config.model_path)
+    model_config._attn_implementation = "sdpa"  # "flash_attention_2", "sdpa", None
 
-    model_config = Videollama2MistralConfig.from_pretrained(config.model_path, trust_remote_code=True)
-    #model_config = AutoConfig.from_pretrained(config.model_path)
-
-    #model_config._attn_implementation = "flash_attention_2"
-    #config._attn_implementation = None
-    model_config._attn_implementation = "sdpa"
-
-    model_type = config.model_type
-    is_pretraining = False  # config.tune_mm_mlp_adapter
-
-    # todo to implement Lora...
-    #https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/3fa0ea5d33ee66a9915c43443ea5e9b19bb0c66e/videollama2/model/__init__.py#L87
+    #model_type = config.model_type
+    #is_pretraining = False  # config.tune_mm_mlp_adapter
 
     model =  Videollama2MistralForCausalLM.from_pretrained(
         config.model_path,
         config=model_config,
         torch_dtype=torch.bfloat16,
         do_sample=True,
-        #vision_tower=config.vision_tower,  # path to load clip vision tower clips locally
+        device_map="auto",
     )
-    model.config.use_cache = True
+    model.config.use_cache = False
 
+    # for pre-training
     if config.freeze_backbone:
         model.model.requires_grad_(False)
 
+    # freeze vision tower
+    # # vision_tower is not trainable in VideoLLaMA2
+    model.get_model().vision_tower.requires_grad_(False)
+
     # Needed w lightning?
-    if hasattr(model, "enable_input_require_grads"):
-        model.enable_input_require_grads()
-    else:
-        def make_inputs_require_grad(module, input, output):
-            output.requires_grad_(True)
-        model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
+    #if hasattr(model, "enable_input_require_grads"):
+    #    model.enable_input_require_grads()
+    #else:
+    #    def make_inputs_require_grad(module, input, output):
+    #        output.requires_grad_(True)
+    #    model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
 
     model.config.mm_projector_lr = None
     model.config.num_frames = NUM_FRAMES
@@ -95,7 +98,6 @@ class VLBLitModuleConfig:
     """
     model_type: str
     model_path: str
-    pretrain_mm_mlp_adapter: str
     freeze_backbone: bool
     lr: float
     betas: list[float]
@@ -106,7 +108,7 @@ class VLBLitModuleConfig:
     t_max: int
 
     def __post_init__(self):
-        self.dtype = torch.float16
+        self.dtype = torch.bfloat16
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.device_map="auto"
 

@@ -210,9 +210,9 @@ def prep_text(text, tokenizer, window_max_length, add_syst_message=False):
     if add_syst_message:
         system_message = [
             {'role': 'system', 'content': (
-            """<<SYS>>\nYou are shown frames from a 5s clip taken from an episode of the TV show Friends. For context, the user is giving you a transcription of the dialogue spoken between the characters in that episode, up until the segment that corresponds to the video frames you are given."""
+            """<<SYS>>\nThis short video extract is from an episode of the TV show Friends. For context, you are given the dialogue spoken between the Friends characters, from the begining of the episode up until the video extract."""
             """\n"""
-            """Please do your best to understand what happens in the video frames you are shown, as a function of the story that is unfolding in the episode.\n<</SYS>>""")
+            """Please do your best to describe what happens in the video extract, especially the characters' actions, intentions, moods and interactions, in the context of the story that is unfolding in the episode.\n<</SYS>>""")
             }
         ]
         message = system_message + message
