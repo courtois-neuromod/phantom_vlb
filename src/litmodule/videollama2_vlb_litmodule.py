@@ -140,7 +140,6 @@ class VLBLitModule(LightningModule):
             input_ids = x_lang,
             attention_mask = attention_mask,
             output_hidden_states=True,
-            output_attentions=True,
             images=x_video,
         )
         """
@@ -197,6 +196,7 @@ class VLBLitModule(LightningModule):
         #x_lang = batch["language"].long().cuda()  # tensor dim = (batch_size, num_feat,) dtype = torch.float32
         x_lang = batch["language"].long().to(self.config.device)  # tensor dim = (batch_size, num_feat,) dtype = torch.float32
 
+        pad_idx = int(batch["mask"])  # int
         #x_lang = torch.tensor(
         #    batch["language"],
         #    dtype=torch.long

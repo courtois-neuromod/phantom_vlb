@@ -159,7 +159,7 @@ class VLB_Dataset(Dataset):
                                     f"{idx}_language", data=run_language[n],
                                 )
                                 group.create_dataset(
-                                    f"{idx}_mask", data=np.array(run_maskval[n]),
+                                    f"{idx}_mask", data=run_maskval[n],
                                 )
                             idx += 1
 
@@ -173,10 +173,10 @@ class VLB_Dataset(Dataset):
         if self.ds_file is None:
             self.ds_file = h5py.File(self.ll_path, "r")
         item = {}
-        for mod in ['timeseries', 'vision', 'language', 'mask']:
+        for mod in ['timeseries', 'vision', 'language']:
             item[mod] = torch.from_numpy(np.array(self.ds_file[f"{idx}"][f"{idx}_{mod}"])).float()
+        item['mask'] = np.array(self.ds_file[f"{idx}"][f"{idx}_mask"]).tolist()
         #item['vision'] = [(item['vision'], 'video')]
-
         return item
 
 
