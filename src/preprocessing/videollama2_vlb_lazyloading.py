@@ -50,6 +50,9 @@ def get_arguments():
         '--input_transcript_path', required=True, type=str, help='Path to the input transcripts data directory.'
     )
     parser.add_argument(
+        '--input_seg_path', required=True, type=str, help='Path to the manual scene segmentation data directory.'
+    )
+    parser.add_argument(
         '--input_video_path', required=True, type=str, help='Path to the input video data directory.'
     )
     parser.add_argument(
@@ -68,7 +71,7 @@ def get_arguments():
         '--model_max_length', type=int, default=2048,
     )
     parser.add_argument(
-        '--window_max_length', type=int, default=2020,
+        '--window_max_length', type=int, default=1900,
     )
     parser.add_argument(
         '--add_syst_message', type=bool, default=False,
@@ -93,15 +96,20 @@ def get_input_paths(ll_args):
     Return dict of paths for available transcript and video files, per episode
     """
     transcript_path = str(Path(ll_args.input_transcript_path).resolve())
+    segmentation_path = str(Path(ll_args.input_seg_path).resolve())
     video_path = str(Path(ll_args.input_video_path).resolve())
 
     input_paths = {}
     for tr_file in sorted(glob.glob(f"{transcript_path}/friends_*.tsv")):
-        ep_num: str = os.path.basename(tr_file).split('_')[-1].split('.')[0]
-        if Path(f"{video_path}/friends_{ep_num}.mkv").exists():
+        ep_num = os.path.basename(tr_file).split('_')[-1].split('.')[0]
+        v_path = f"{video_path}/friends_{ep_num}.mkv"
+        s_path = (f"{segmentation_path}/friends_{ep_num}_manualseg.tsv").replace("s0", "s")
+
+        if Path(v_path).exists() and Path(s_path).exists():
             input_paths[ep_num] = {
                 'transcript': tr_file,
-                'video': f'{video_path}/friends_{ep_num}.mkv',
+                'seg': s_path,
+                'video': v_path,
             }
 
     return input_paths
@@ -121,6 +129,21 @@ def get_done_ep(lazyload_path):
 
     ll_file.close()
     return epi_list
+
+
+def get_sceneonsets(seg_file):
+    """."""
+
+    scene_onsets = []
+    seen_scenes = []
+
+    for i in range(seg_file.shape[0]):
+        scene_num = seg_file["scene"].iloc[i]
+        if scene_num not in seen_scenes:
+            scene_onsets.append(seg_file["onset"].iloc[i])
+            seen_scenes.append(scene_num)
+
+    return scene_onsets
 
 
 def prep_video_processor(ll_args):
@@ -177,7 +200,7 @@ def prep_tokenizer(ll_args):
     return tokenizer
 
 
-def prep_text(text, tokenizer, window_max_length, add_syst_message=False):
+def prep_text(text, tokenizer, window_max_length, add_syst_message=False, is_scene=False):
     """
     Tokenizes raw input text
     Adapted from
@@ -208,13 +231,22 @@ def prep_text(text, tokenizer, window_max_length, add_syst_message=False):
 
     # Not certain if this step is helpful or needed...
     if add_syst_message:
-        system_message = [
-            {'role': 'system', 'content': (
-            """<<SYS>>\nThis short video extract is from an episode of the TV show Friends. For context, you are given the dialogue spoken between the Friends characters, from the begining of the episode up until the video extract."""
-            """\n"""
-            """Please do your best to describe what happens in the video extract, especially the characters' actions, intentions, moods and interactions, in the context of the story that is unfolding in the episode.\n<</SYS>>""")
-            }
-        ]
+        if is_scene:
+            system_message = [
+                {'role': 'system', 'content': (
+                """<<SYS>>\nThis short video is from a scene from the TV show Friends. You are given the dialogue between the characters, from the beginning of the scene until the end of the short video."""
+                """\n"""
+                """Try to understand what is happening in this short video, including the characters' actions, intentions, moods and interactions, in the context of the situation unfolding in the scene.\n<</SYS>>""")
+                }
+            ]
+        else:
+            system_message = [
+                {'role': 'system', 'content': (
+                """<<SYS>>\nThis short video is from an episode of the TV show Friends. You are given the dialogue between the characters, from the beginning of the episode up until the end of the short video."""
+                """\n"""
+                """Try to understand what is happening in this short video, including the characters' actions, intentions, moods and interactions, in the context of the story unfolding in the episode.\n<</SYS>>""")
+                }
+            ]
         message = system_message + message
 
     prompt = tokenizer.apply_chat_template(message, tokenize=False, add_generation_prompt=False)
@@ -309,24 +341,88 @@ def make_lazy_loading_videollama2(ll_args):
         if ep_num not in done_epnum:
 
             transcript = pd.read_csv(in_paths['transcript'], sep = '\t')
-            text_chunk: str = ''
-            transcript_tokens = []
+            seg_times = get_sceneonsets(pd.read_csv(in_paths['seg'], sep = '\t'))
+
+            # tokens for transcript from episode onset up until TR
+            epi_tokens = []
+            epi_chunk = ''
+
+            # tokens for transcript from scene onset up until TR
+            scenes_tokens = []
+            scene_chunk = ''
+            j = 1
+
+            # tokens for transcript from last few TRs (number of TRs == ll_args.window_duration)
+            trs_tokens = []
+            tr_chunk = [""] * ll_args.window_duration
+
+            mask_params = []
+
             for i in range(transcript.shape[0]):
+                if (i * ll_args.tr) > seg_times[j] and j < (len(seg_times) - 1):
+                    # reset input text with new scene onset
+                    scene_chunk = ''
+                    j += 1
+
                 if not pd.isnull(transcript["text_per_tr"][i]):
-                    text_chunk += str(transcript["text_per_tr"][i])
-                    # DONE: run some sanity checks to validate truncating side (from the left)
-                text_ids = prep_text(text_chunk, tokenizer, ll_args.window_max_length, ll_args.add_syst_message)
-                transcript_tokens.append(
-                    np.pad(
-                        text_ids, (0, (ll_args.model_max_length + 1)-len(text_ids))
-                    )
+                    i_text = str(transcript["text_per_tr"][i])
+                    epi_chunk += i_text
+                    scene_chunk += i_text
+                else:
+                    i_text = ""
+
+                tr_chunk = tr_chunk[1:] + [i_text]
+
+                episode_ids = prep_text(epi_chunk, tokenizer, ll_args.window_max_length, ll_args.add_syst_message)
+                scene_ids = prep_text(scene_chunk, tokenizer, ll_args.window_max_length, ll_args.add_syst_message, is_scene=True)
+                trs_ids = prep_text(''.join(tr_chunk), tokenizer, ll_args.window_max_length)
+
+                epi_pad = (ll_args.model_max_length)-len(episode_ids)
+                epi_tokens.append(
+                    np.pad(episode_ids, (0, epi_pad))
                 )
+                scene_pad = (ll_args.model_max_length)-len(scene_ids)
+                scenes_tokens.append(
+                    np.pad(scene_ids, (0, scene_pad))
+                )
+                trs_pad = (ll_args.model_max_length)-len(trs_ids)
+                trs_tokens.append(
+                    np.pad(trs_ids, (0, trs_pad))
+                )
+                mask_params.append(
+                    np.array(
+                        [len(episode_ids), len(scene_ids), len(trs_ids)]
+                ))
 
             with h5py.File(ll_path, "a") as f:
                 group = f.create_group(ep_num) if not ep_num in f else f[ep_num]
                 group.create_dataset(
-                    "transcript_features",
-                    data=np.array(transcript_tokens),
+                    "episode_transcript_features",
+                    data=np.array(epi_tokens),
+                    **{
+                        "compression": "gzip",
+                        "compression_opts": 4,
+                    },
+                )
+                group.create_dataset(
+                    "scene_transcript_features",
+                    data=np.array(scenes_tokens),
+                    **{
+                        "compression": "gzip",
+                        "compression_opts": 4,
+                    },
+                )
+                group.create_dataset(
+                    f"trs_transcript_features",
+                    data=np.array(trs_tokens),
+                    **{
+                        "compression": "gzip",
+                        "compression_opts": 4,
+                    },
+                )
+                group.create_dataset(
+                    "masking_transcript_params",
+                    data=np.array(mask_params),
                     **{
                         "compression": "gzip",
                         "compression_opts": 4,

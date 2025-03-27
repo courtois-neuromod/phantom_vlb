@@ -16,11 +16,16 @@ module load python/3.10.13
 # activate project's virtual env
 source /home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/vllama2_venv/bin/activate
 
-SUBNUM="sub-${1}"
-FEATURES_PATH="/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/results/videollama2/lazyloading/friends/friends_*_features.h5"
-TIMESERIES_PATH="/home/mstlaure/projects/rrg-pbellec/mstlaure/cneuromod_extract_tseries/outputs/friends/${SUBNUM}/func/${SUBNUM}_task-friends_space-MNI152NLin2009cAsym_atlas-Schaefer18_desc-1000Parcels7Networks_timeseries.h5"
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
-rsync -tv --info=progress2 $FEATURES_PATH $SLURM_TMPDIR/
-rsync -tv --info=progress2 $TIMESERIES_PATH $SLURM_TMPDIR/
+SUBNUM="sub-${1}"
+#FEATURES_PATH="/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/results/videollama2/lazyloading/friends/friends_*_features.h5"
+#TIMESERIES_PATH="/home/mstlaure/projects/rrg-pbellec/mstlaure/cneuromod_extract_tseries/outputs/friends/${SUBNUM}/func/${SUBNUM}_task-friends_space-MNI152NLin2009cAsym_atlas-Schaefer18_desc-1000Parcels7Networks_timeseries.h5"
+
+#rsync -tv --info=progress2 $FEATURES_PATH $SLURM_TMPDIR/
+#rsync -tv --info=progress2 $TIMESERIES_PATH $SLURM_TMPDIR/
+
+TEMP_PATH="/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/temp_files/friends_{$SUBNUM}_*_llFile.h5"
+rsync -tv --info=progress2 $TEMP_PATH $SLURM_TMPDIR/
 
 python -m train_dev_tests experiment=VLB_videollama2 subject=$SUBNUM

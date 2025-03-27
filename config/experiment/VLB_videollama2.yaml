@@ -15,9 +15,10 @@ datamodule:
     window: 3
     seasons: [s01, s02, s04, s05, s06]
     subject: ${subject}
+    transcript:
     random_state: ${random_state}
-    batch_size: 1
-    num_workers: 0
+    batch_size: 3
+    num_workers: 3
     shuffle_val_data: True
 
 litmodule:
@@ -26,7 +27,6 @@ litmodule:
   config:
     _target_:
       src.litmodule.VLBLitModuleConfig
-    model_type: videollama2
     model_path: DAMO-NLP-SG/VideoLLaMA2-7B
     freeze_backbone: False
     lr: 1e-3

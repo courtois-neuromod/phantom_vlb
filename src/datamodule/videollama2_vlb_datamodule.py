@@ -29,6 +29,11 @@ from omegaconf import DictConfig
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 
+MASK_COL = {
+    "episode_transcript_features": 0,
+    "scene_transcript_features": 1,
+    "trs_transcript_features": 2,
+}
 
 @dataclass
 class VLBDataModuleConfig:
@@ -59,6 +64,7 @@ class VLBDataModuleConfig:
     lazyload_path: str
     subject: str
     seasons: list[str]
+    transcript_type: str
     delay: int
     window: int
     random_state: int
@@ -131,7 +137,10 @@ class VLB_Dataset(Dataset):
                         run_tseries = np.array(b_file[ses][run])[(self.config.window-1)+self.config.delay:]
 
                         run_vision = np.array(h5py.File(f_path, "r")[ep_num]['video_features'])[(self.config.window-1):]
-                        run_language = np.array(h5py.File(f_path, "r")[ep_num]['transcript_features'])[(self.config.window-1):]
+                        run_language = np.array(h5py.File(f_path, "r")[ep_num][self.config.transcript_type])[(self.config.window-1):]
+                        run_maskval = np.array(h5py.File(f_path, "r")[ep_num]['masking_transcript_params'])[
+                            (self.config.window-1):, MASK_COL[self.config.transcript_type]
+                        ]
 
                         n_rows = min(
                             (run_tseries.shape[0], run_vision.shape[0], run_language.shape[0]),
@@ -149,7 +158,9 @@ class VLB_Dataset(Dataset):
                                 group.create_dataset(
                                     f"{idx}_language", data=run_language[n],
                                 )
-
+                                group.create_dataset(
+                                    f"{idx}_mask", data=np.array(run_maskval[n]),
+                                )
                             idx += 1
 
         with h5py.File(self.ll_path, "r") as f:
@@ -162,9 +173,9 @@ class VLB_Dataset(Dataset):
         if self.ds_file is None:
             self.ds_file = h5py.File(self.ll_path, "r")
         item = {}
-        for mod in ['timeseries', 'vision', 'language']:
+        for mod in ['timeseries', 'vision', 'language', 'mask']:
             item[mod] = torch.from_numpy(np.array(self.ds_file[f"{idx}"][f"{idx}_{mod}"])).float()
-        item['vision'] = [(item['vision'], 'video')]
+        #item['vision'] = [(item['vision'], 'video')]
 
         return item
 
