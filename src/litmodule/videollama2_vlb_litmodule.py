@@ -104,7 +104,7 @@ class VLBLitModuleConfig:
 
     def __post_init__(self):
         self.dtype = torch.float16  # torch.bfloat16 for newer GPUs
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.device_map="auto"
 
 
@@ -131,7 +131,7 @@ class VLBLitModule(LightningModule):
         # https://github.com/courtois-neuromod/phantom_LLM/blob/7258a5e95fe256d9ae4669dc5a1ca1be34a0d867/phantom_LLM/src/models/ridge_align.py#L76
 
 
-    def forward(self, x_video, x_lang, attention_mask=None, hrf_weights=None):
+    def forward(self, x_video, x_lang, pad_idx, attention_mask=None, hrf_weights=None):
         """."""
         # https://github.com/courtois-neuromod/phantom_LLM/blob/7258a5e95fe256d9ae4669dc5a1ca1be34a0d867/phantom_LLM/src/models/ridge_align.py#L76
 
@@ -144,15 +144,18 @@ class VLBLitModule(LightningModule):
         )
         """
         outputs has two keys: 'logits' and 'hidden_states'
-        outputs.logits is a single tensor of dim=(1, 3231, 32000)
-        outputs.hidden_states is a tuple of len=33, each item is a tensor of dim=(1, 3230*, 4096), *depends on len of x_lang
+        outputs.logits is a single tensor of dim=(batch_size, 3230, 32000) where 32000 is vocab size, 3230 is input sequence lenght
+        outputs.hidden_states is a tuple of len=33 (number of layers), each item is a tensor of dim=(batch_size, 3230*, 4096), *depends on len of x_lang; 4096 is hidden dim
+
+        connector output (temporally agregated video features) are of dim torch.Size([1, 1183, 4096])
+        where 4096 is hidden dim size, and 1183 is the sequence lenght for 12 frames of 336x336 video input
         """
-        # outputs
-        hidden_states = outputs.hidden_states[-1]  # which to pick when there is padding? Just don't use padding and a batch size of 1??
+        # outputs (from last hidden layer)
+        hidden_states = outputs.hidden_states[-1]
 
-        #hidden_states = outputs.last_hidden_state
+        # pad_idx = number of 0s padded to the right of the input_ids (use it to mask output hidden_states[i, :-pad_idx[i], :])
 
-        # Apply HRF Convolution
+        # Apply HRF Convolution ?
         hrf_embeddings = self.hrf_layer(hidden_states, hrf_weights).squeeze(1)
 
         # Remove the singleton dimension
@@ -184,34 +187,17 @@ class VLBLitModule(LightningModule):
         # videollama2 inference
         # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/__init__.py#L32
         # image_or_video (torch.Tensor): image tensor (1, C, H, W) / video tensor (T, C, H, W).
-        #x_video = torch.tensor(batch["vision"], dtype=torch.long).half().cuda()
-        #x_video = [(batch["vision"][i].half().cuda(), "video") for i in range(batch["vision"].shape[0])]
         x_video = [(batch["vision"][i].to(self.config.dtype).to(self.config.device), "video") for i in range(batch["vision"].shape[0])]
 
-        #x_video = batch["vision"].half().cuda()  # dim = (12, 3, 336, 336), dtype = torch.float32
-        # TODO: determine if .half() to torch.float16 is just for inference or also for training...
-        #x_video = [(x_video, 'video')]
-
-        #x_lang = batch["language"].unsqueeze(0).long().cuda()
-        #x_lang = batch["language"].long().cuda()  # tensor dim = (batch_size, num_feat,) dtype = torch.float32
         x_lang = batch["language"].long().to(self.config.device)  # tensor dim = (batch_size, num_feat,) dtype = torch.float32
 
-        pad_idx = int(batch["mask"])  # int
-        #x_lang = torch.tensor(
-        #    batch["language"],
-        #    dtype=torch.long
-        #).unsqueeze(0).long().cuda(),
-
-        # from: attention_masks = input_ids.ne(tokenizer.pad_token_id).long().cuda()
-        #attention_masks = x_lang.ne(tokenizer.pad_token_id).long().cuda()
-        # tokenizer.pad_token == tokenizer.unk_token = '<unk>'
-        # tokenizer.pad_token_id == 0
-        #attention_mask = x_lang.ne(0).long().cuda()
+        pad_idx = int(batch["mask"])  # int, number of 0s adding added on the right side of the text input ids
         attention_mask = x_lang.ne(0).long().to(self.config.device)
 
         output = self.forward(
              x_video,
              x_lang,
+             pad_idx,
              attention_mask = attention_mask,
         )
         # prepare input ids for multimodal

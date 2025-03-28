@@ -391,7 +391,7 @@ def make_lazy_loading_videollama2(ll_args):
                 )
                 mask_params.append(
                     np.array(
-                        [len(episode_ids), len(scene_ids), len(trs_ids)]
+                        [epi_pad, scene_pad, trs_pad]
                 ))
 
             with h5py.File(ll_path, "a") as f:

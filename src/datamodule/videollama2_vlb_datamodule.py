@@ -138,6 +138,7 @@ class VLB_Dataset(Dataset):
 
                         run_vision = np.array(h5py.File(f_path, "r")[ep_num]['video_features'])[(self.config.window-1):]
                         run_language = np.array(h5py.File(f_path, "r")[ep_num][self.config.transcript_type])[(self.config.window-1):]
+                        # number of 0s added at end of input ids (right-side padding)
                         run_maskval = np.array(h5py.File(f_path, "r")[ep_num]['masking_transcript_params'])[
                             (self.config.window-1):, MASK_COL[self.config.transcript_type]
                         ]
