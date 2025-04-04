@@ -72,9 +72,6 @@ def get_arguments():
         '--model_max_length', type=int, default=2048,
     )
     parser.add_argument(
-        '--add_syst_message', type=bool, default=False,
-    )
-    parser.add_argument(
         '--bf16', type=bool, default=True,
     )
     parser.add_argument(

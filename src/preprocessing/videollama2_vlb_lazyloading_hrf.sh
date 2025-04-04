@@ -31,7 +31,6 @@ python videollama2_vlb_lazyloading_hrf.py \
     --model_type videollama2 \
     --model_path DAMO-NLP-SG/VideoLLaMA2-7B \
     --model_max_length 2048 \
-    --add_syst_message True \
     --bf16 False \
     --frames_per_tr 4 \
     --tr 1.49 \
