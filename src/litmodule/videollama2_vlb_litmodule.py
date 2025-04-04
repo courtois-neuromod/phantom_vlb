@@ -5,9 +5,11 @@ from dataclasses import dataclass
 
 #import numpy as np
 import torch
+import torch.nn.functional as F
 
 #from hydra.utils import instantiate
 from lightning.pytorch import LightningModule
+from nilearn.glm.first_level import compute_regressor
 from torch.optim import Adam, AdamW, lr_scheduler
 from transformers import (
     AutoConfig,
@@ -28,6 +30,11 @@ sys.path.append('../../')
 from VideoLLaMA2.videollama2.model.videollama2_mistral import (
     #Videollama2MistralConfig,
     Videollama2MistralForCausalLM,
+)
+
+from src import (
+    HRFConvolveLayer,
+    RidgeRegressionLayer,
 )
 
 NUM_FRAMES = 12  # (must match lazyloading... 3TRs and 4 frames per TR); higher than default of 8 in vllama2's CONSTANTS
@@ -80,6 +87,32 @@ def load_pretrained_vllama2(
     return model
 
 
+def get_hrf_weight(time_diff: float) -> float:
+    """
+    Computes estimated hrf weight for an input token (language or visual), based on their temporal distance from
+    the target BOLD frame it means to predict. hrf weights are used to apply a weighted sum on the input token's
+    latent (hidden) space embeddings in a manner that models the hemodynamic response function.
+
+    Args: time_diff (float): absolute time difference between input token time and target TR time, in seconds.
+        Note that target TR time is estimated in the middle of a BOLD slice. It corresponds to TR_onset + (TR-Length/2)
+    Output:
+        hrf_weight (float): weight that estimates the relative impact of an input token on a target TR based on their respective timing and
+        the shape of the hemodynamic response, as estimated with Nilearn's Glover function
+    """
+
+    # TODO: implement for entire sequence of tokens, by flipping time diffs from small to large, and then flipping output back
+
+    hrf_regressors, regressor_names = compute_regressor(
+        exp_condition=np.array([[0], [1], [1]]),        # Dummy onsets, duration, amplitude
+        #hrf_model="glover + derivative + dispersion",
+        hrf_model="glover",
+        frame_times=np.array([0.0, time_diff]),
+    )
+
+    return hrf_regressors[-1, 0]
+
+
+
 @dataclass
 class VLBLitModuleConfig:
     """Holds :class:`VLBLitModuleConfig` config values.
@@ -94,6 +127,9 @@ class VLBLitModuleConfig:
     """
     model_path: str
     freeze_backbone: bool
+    dropout_rate: float
+    num_target: int
+    l2_lambda: float
     lr: float
     betas: list[float]
     eps: float
@@ -124,14 +160,21 @@ class VLBLitModule(LightningModule):
         super().__init__()
 
         self.config: VLBLitModuleConfig = config
+
         self.nnmodule = load_pretrained_vllama2(self.config)
-        #self.hrf_layer
-        #self.ridge_layer
 
         # https://github.com/courtois-neuromod/phantom_LLM/blob/7258a5e95fe256d9ae4669dc5a1ca1be34a0d867/phantom_LLM/src/models/ridge_align.py#L76
+        self.hrf_layer = HRFConvolveLayer()
+        self.ridge_layer = RidgeRegressionLayer(
+            self.nnmodule.config.hidden_size,
+            self.config.num_target,  # brain target voxel count or parcel count
+            self.config.l2_lambda,
+        )
+        self.layer_norm = torch.nn.LayerNorm(self.nnmodule.config.hidden_size)  # embedding dim == 4096 for vllama2
+        self.dropout = torch.nn.Dropout(self.config.dropout_rate)
 
 
-    def forward(self, x_video, x_lang, pad_idx, attention_mask=None, hrf_weights=None):
+    def forward(self, x_video, x_lang, pad_idx, hrf_weights, attention_mask=None, hrf_weights=None):
         """."""
         # https://github.com/courtois-neuromod/phantom_LLM/blob/7258a5e95fe256d9ae4669dc5a1ca1be34a0d867/phantom_LLM/src/models/ridge_align.py#L76
 
@@ -148,25 +191,37 @@ class VLBLitModule(LightningModule):
         outputs.hidden_states is a tuple of len=33 (number of layers), each item is a tensor of dim=(batch_size, 3230*, 4096), *depends on len of x_lang; 4096 is hidden dim
 
         connector output (temporally agregated video features) are of dim torch.Size([1, 1183, 4096])
-        where 4096 is hidden dim size, and 1183 is the sequence lenght for 12 frames of 336x336 video input
+        where 4096 is hidden dim size, and 1183 is the sequence lenght for 12 frames of 336x336 video input  (169*7 = 1183...)
         """
-        # outputs (from last hidden layer)
-        hidden_states = outputs.hidden_states[-1]
+        # outputs (from last hidden layer); remove padding... (depends on batch size...)
+        hidden_states = outputs.hidden_states[-1][:, :-pad_idx, :]#.detach().cpu().numpy()
+        # detach? from:
+        # https://github.com/courtois-neuromod/video_transformer/blob/0906e9a71a2fdb511190f7a757c8aadcb1f6c990/scripts/apply_gpt_ridge_encoding.py#L26
+        hidden_states = self.layer_norm(hidden_states)
 
+        # to convolve, use
         # pad_idx = number of 0s padded to the right of the input_ids (use it to mask output hidden_states[i, :-pad_idx[i], :])
 
+        # video_gpt: pca, ridge on brain encooding
+        # https://github.com/courtois-neuromod/video_transformer/blob/0906e9a71a2fdb511190f7a757c8aadcb1f6c990/scripts/apply_gpt_ridge_encoding.py#L96
+
         # Apply HRF Convolution ?
-        hrf_embeddings = self.hrf_layer(hidden_states, hrf_weights).squeeze(1)
+        # TODO: derive hrf weights based on frames and text timing relative to target (create function to derive distances)
+        # TODO: derive and pass down index for onset of visual frame and offset of within-TRs text tokens
+        # TODO: how to handle batch sizes > 1...
+        hrf_embeddings = self.dropout(
+            self.hrf_layer(hidden_states[:, on_seq:off_seq , :], hrf_weights).squeeze(1)
+        )
 
         # Remove the singleton dimension
         hrf_embeddings = hrf_embeddings.squeeze(-1)
         # print(f"HRF embeddings shape after squeeze: {hrf_embeddings.shape}")
 
         # Apply Ridge Regression
-        regression_output = self.ridge_layer(hrf_embeddings)
+        regression_output, l2_reg = self.ridge_layer(hrf_embeddings)
         # print(f"Ridge Regression output shape: {regression_output.shape}")
 
-        return regression_output
+        return regression_output, l2_reg
 
 
     def training_step(self, batch):
@@ -177,9 +232,6 @@ class VLBLitModule(LightningModule):
         If it returns a dictionary, items get stacked under each key, and can
         get called by that key from a batch dictionary. E.g. here "timeseries", "vision", "language"
         """
-        #y = batch["timeseries"].cuda()  # dim = (batch_size, 1000,) dtype = torch.float32
-        y = batch["timeseries"].to(self.config.dtype).to(self.config.device)  # dim = (batch_size, 1000,) dtype = torch.float32
-
         # batch["vision"]: # list[tuple] of len == batch size
         # each tuple in the list is (tensor , 'video'),
         # where tensor is (dim = (12, 3, 336, 336), dtype = torch.float32)
@@ -191,19 +243,36 @@ class VLBLitModule(LightningModule):
 
         x_lang = batch["language"].long().to(self.config.device)  # tensor dim = (batch_size, num_feat,) dtype = torch.float32
 
+        # TODO: add to datamodule: derive time stamps and onset / offset idx for tokens based on absolute time diff (in secs) to target TR
         pad_idx = int(batch["mask"])  # int, number of 0s adding added on the right side of the text input ids
         attention_mask = x_lang.ne(0).long().to(self.config.device)
 
-        output = self.forward(
+        # TODO: from timing sequence, obtain hrf_weights for sequence of hidden states from frames and words spoken in clip
+        brain_encoding, l2_reg = self.forward(
              x_video,
              x_lang,
              pad_idx,
              attention_mask = attention_mask,
         )
-        # prepare input ids for multimodal
+        # From: prepare input ids for multimodal
         # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/c0bb03abf6b8a6b9a8dccac006fb4db5d4d9e414/videollama2/model/videollama2_arch.py#L161
 
-        # TODO: output loss function
+        #y = batch["timeseries"].cuda()  # dim = (batch_size, 1000,) dtype = torch.float32
+        y = batch["timeseries"].to(self.config.dtype).to(self.config.device)  # dim = (batch_size, 1000,) dtype = torch.float32
+
+        # From phantom_LLM: two alternatives, cosine similarity loss and
+        # https://github.com/courtois-neuromod/phantom_LLM/blob/5505873e190b4b4b1c8103daf02d68fa37e0156e/phantom_LLM/src/run_training_brain_corpus.py#L160
+        brain_loss = (1 - F.cosine_similarity(brain_encoding, y, dim=-1).mean()) + l2_reg
+        brain_loss = torch.nn.MSELoss(brain_encoding, y) + l2_reg
+
+        # From video_gpt
+        # https://github.com/courtois-neuromod/video_transformer/blob/0906e9a71a2fdb511190f7a757c8aadcb1f6c990/src/videogpt/vqvae_ba.py#L121
+        brain_loss = F.mse_loss(brain_encoding, y)
+
+        self.log("train/brain_loss", brain_loss)
+
+        return brain_loss
+
 
     def configure_optimizers(
         self: "VLBLitModule",

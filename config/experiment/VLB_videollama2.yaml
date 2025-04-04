@@ -29,6 +29,9 @@ litmodule:
       src.litmodule.VLBLitModuleConfig
     model_path: DAMO-NLP-SG/VideoLLaMA2-7B
     freeze_backbone: False
+    dropout_rate: 0.2
+    num_target: 1000
+    l2_lambda: 0.001
     lr: 1e-3
     betas: [0.9, 0.999]
     eps: 1e-08
