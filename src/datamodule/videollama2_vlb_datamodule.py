@@ -15,6 +15,7 @@ https://github.com/courtois-neuromod/phantom_LLM/blob/dev_align/phantom_LLM/src/
 https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L248
 """
 
+import math
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,11 +30,6 @@ from omegaconf import DictConfig
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 
-MASK_COL = {
-    "episode_transcript_features": 0,
-    "scene_transcript_features": 1,
-    "trs_transcript_features": 2,
-}
 
 @dataclass
 class VLBDataModuleConfig:
@@ -64,7 +60,6 @@ class VLBDataModuleConfig:
     lazyload_path: str
     subject: str
     seasons: list[str]
-    transcript_type: str
     delay: int
     window: int
     random_state: int
@@ -127,27 +122,49 @@ class VLB_Dataset(Dataset):
             for s in self.seasons:
 
                 f_path = self.config.features_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"]).replace('*', f"s{s[-1]}")
+                f_file = h5py.File(f_path, "r")
                 epi_list = [
-                    x for x in h5py.File(f_path, "r").keys()
+                    x for x in f_file.keys()
                 ]
 
                 for ep_num in epi_list:
                     if ep_num in ep_keys:
                         ses, run = ep_keys[ep_num]
                         run_tseries = np.array(b_file[ses][run])[(self.config.window-1)+self.config.delay:]
+                        # TR onset assigned to the middle of a TR; onset + (1.49s/2)
+                        run_tr_onsets = [((self.config.window-1)+self.config.delay+0.5+i)*1.49 for i in range(run_tseries.shape[0])]
 
-                        run_vision = np.array(h5py.File(f_path, "r")[ep_num]['video_features'])[(self.config.window-1):]
-                        run_language = np.array(h5py.File(f_path, "r")[ep_num][self.config.transcript_type])[(self.config.window-1):]
-                        # number of 0s added at end of input ids (right-side padding)
-                        run_maskval = np.array(h5py.File(f_path, "r")[ep_num]['masking_transcript_params'])[
-                            (self.config.window-1):, MASK_COL[self.config.transcript_type]
-                        ]
+                        run_vision = np.array(f_file[ep_num]['video_features'])[(self.config.window-1):]
+                        num_frames = run_vision.shape[1]
+                        """
+                        Time diff from middle of TR for each downsampled frame's hidden features
+                        Downsampled by vllama2's connector's sampler, a nn.3DConv layer (pad=1, stride=2)
+                        12 frames of 24x24 -> 7 downsampled frames of 13x13 (169 features/frame)
+                        """
+                        num_ds_frames = math.floor(num_frames/2) + 1
+                        step = self.config.window/(num_ds_frames-1)
+                        abs_tr_delay = (self.config.window-1)+self.config.delay + 0.5
+                        run_vis_onsets = abs_tr_delay - np.arange(0, (self.config.window+step), step)
 
+                        run_language = np.array(f_file[ep_num]['transcript_features'])[(self.config.window-1):]
+                        run_lang_onsets = np.array(f_file[ep_num]['transcript_onsets'])[(self.config.window-1):]
+                        """
+                        Three int per examplar
+                        0: number of 0s padded at end of language input ids (right-side padding)
+                        1: number of tokens in the instruction portion of the input lang sequence
+                        2: number of tokens in the dialogue portion of the input lang sequence
+                        """
+                        run_maskval = np.array(f_file[ep_num]['masking_params'])[(self.config.window-1):]
+
+                        assert run_maskval.shape[0] == run_language.shape[0]
                         n_rows = min(
                             (run_tseries.shape[0], run_vision.shape[0], run_language.shape[0]),
                         )
 
                         for n in range(n_rows):
+                            pad_len, inst_len, diag_len = run_maskval[n]
+                            run_lang_onsets[n][:diag_len] = run_tr_onsets[n] - run_lang_onsets[n][:diag_len]
+
                             with h5py.File(self.ll_path, "a") as f:
                                 group = f.create_group(f"{idx}")
                                 group.create_dataset(
@@ -157,12 +174,20 @@ class VLB_Dataset(Dataset):
                                     f"{idx}_vision", data=run_vision[n],
                                 )
                                 group.create_dataset(
+                                    f"{idx}_vis_diff2TR", data=run_vis_onsets,
+                                )
+                                group.create_dataset(
                                     f"{idx}_language", data=run_language[n],
                                 )
                                 group.create_dataset(
-                                    f"{idx}_mask", data=run_maskval[n],
+                                    f"{idx}_lang_diff2TR", data=run_lang_onsets[n],
+                                )
+                                group.create_dataset(
+                                    f"{idx}_padvals", data=run_maskval[n],
                                 )
                             idx += 1
+
+                f_file.close()
 
         with h5py.File(self.ll_path, "r") as f:
             self.length = max([int(s) for s in f.keys()]) + 1
@@ -174,9 +199,10 @@ class VLB_Dataset(Dataset):
         if self.ds_file is None:
             self.ds_file = h5py.File(self.ll_path, "r")
         item = {}
-        for mod in ['timeseries', 'vision', 'language']:
+        # TODO: validate this part w lit module train step
+        for mod in ['timeseries', 'vision', 'language', 'vis_diff2TR', 'lang_diff2TR']:
             item[mod] = torch.from_numpy(np.array(self.ds_file[f"{idx}"][f"{idx}_{mod}"])).float()
-        item['mask'] = np.array(self.ds_file[f"{idx}"][f"{idx}_mask"]).tolist()
+        item['padvals'] = np.array(self.ds_file[f"{idx}"][f"{idx}_padvals"]).tolist()
         #item['vision'] = [(item['vision'], 'video')]
         return item
 

@@ -15,7 +15,6 @@ datamodule:
     window: 3
     seasons: [s01, s02, s04, s05, s06]
     subject: ${subject}
-    transcript_type: scene_transcript_features
     random_state: ${random_state}
     batch_size: 3
     num_workers: 3
