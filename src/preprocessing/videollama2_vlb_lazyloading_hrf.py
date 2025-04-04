@@ -199,14 +199,14 @@ def get_max_token(args):
     """
     Cap the number of input text tokens based on the model capacity and visual sequence lenght
     """
-    num_frames = ll_args.window_duration * ll_args.frames_per_tr  # number video frames per examplar
+    num_frames = args.window_duration * args.frames_per_tr  # number video frames per examplar
 
     # Input frames are downsampled by the vllama2 connector's sampler
     # the sampler is na n.Conv3d over time (frames), height, width
     # with pad=1, stride=2
     # e.g., 12, 24, 24 -> 7, 13, 13
     num_downsampled_frames = math.floor(num_frames/2) + 1
-    max_text_tokens = ll_args.model_max_length - (num_downsampled_frames*169)  # visual seq len; 13 * 13 = 169
+    max_text_tokens = args.model_max_length - (num_downsampled_frames*169)  # visual seq len; 13 * 13 = 169
 
     # -1, because the modality token gets removed by vllama2 during input processing
     return max_text_tokens + 1
