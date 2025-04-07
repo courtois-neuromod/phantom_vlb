@@ -153,7 +153,9 @@ class VLB_Dataset(Dataset):
                         # delay between onset of input window and target TR's time stamp (assigned to middle of a TR, hence +0.5)
                         abs_tr_delay = (self.config.window-1)+self.config.delay + 0.5
                         run_vis_onsets = 1.49*(abs_tr_delay - np.arange(0, (self.config.window+step), step))
-                        run_vis_weights = get_hrf_weight(run_vis_onsets)
+                        run_vis_weights = np.array([
+                                get_hrf_weight(t) for t in run_vis_onsets
+                            ])
 
                         run_language = np.array(f_file[ep_num]['transcript_features'])[(self.config.window-1):]
                         run_lang_onsets = np.array(f_file[ep_num]['transcript_onsets'])[(self.config.window-1):]
