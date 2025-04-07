@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 #from hydra.utils import instantiate
 from lightning.pytorch import LightningModule
-from nilearn.glm.first_level import compute_regressor
+
 from torch.optim import Adam, AdamW, lr_scheduler
 from transformers import (
     AutoConfig,
@@ -85,31 +85,6 @@ def load_pretrained_vllama2(
     model.get_model().vision_tower.requires_grad_(False)
 
     return model
-
-
-def get_hrf_weight(time_diff: float) -> float:
-    """
-    Computes estimated hrf weight for an input token (language or visual), based on their temporal distance from
-    the target BOLD frame it means to predict. hrf weights are used to apply a weighted sum on the input token's
-    latent (hidden) space embeddings in a manner that models the hemodynamic response function.
-
-    Args: time_diff (float): absolute time difference between input token time and target TR time, in seconds.
-        Note that target TR time is estimated in the middle of a BOLD slice. It corresponds to TR_onset + (TR-Length/2)
-    Output:
-        hrf_weight (float): weight that estimates the relative impact of an input token on a target TR based on their respective timing and
-        the shape of the hemodynamic response, as estimated with Nilearn's Glover function
-    """
-
-    # TODO: implement for entire sequence of tokens, by flipping time diffs from small to large, and then flipping output back
-
-    hrf_regressors, regressor_names = compute_regressor(
-        exp_condition=np.array([[0], [1], [1]]),        # Dummy onsets, duration, amplitude
-        #hrf_model="glover + derivative + dispersion",
-        hrf_model="glover",
-        frame_times=np.array([0.0, time_diff]),
-    )
-
-    return hrf_regressors[-1, 0]
 
 
 

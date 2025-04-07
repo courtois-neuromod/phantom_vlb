@@ -17,6 +17,7 @@ https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50
 
 import math
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,6 +30,12 @@ from lightning.pytorch import LightningDataModule
 from omegaconf import DictConfig
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
+
+sys.path.append('../../')
+
+from src import (
+    get_hrf_weight,
+)
 
 
 @dataclass
@@ -138,13 +145,15 @@ class VLB_Dataset(Dataset):
                         num_frames = run_vision.shape[1]
                         """
                         Time diff from middle of TR for each downsampled frame's hidden features
-                        Downsampled by vllama2's connector's sampler, a nn.3DConv layer (pad=1, stride=2)
+                        Downsampled by sampler of vllama2 connector, a nn.3DConv layer (pad=1, stride=2)
                         12 frames of 24x24 -> 7 downsampled frames of 13x13 (169 features/frame)
                         """
                         num_ds_frames = math.floor(num_frames/2) + 1
                         step = self.config.window/(num_ds_frames-1)
+                        # delay between onset of input window and target TR's time stamp (assigned to middle of a TR, hence +0.5)
                         abs_tr_delay = (self.config.window-1)+self.config.delay + 0.5
-                        run_vis_onsets = abs_tr_delay - np.arange(0, (self.config.window+step), step)
+                        run_vis_onsets = 1.49*(abs_tr_delay - np.arange(0, (self.config.window+step), step))
+                        run_vis_weights = get_hrf_weight(run_vis_onsets)
 
                         run_language = np.array(f_file[ep_num]['transcript_features'])[(self.config.window-1):]
                         run_lang_onsets = np.array(f_file[ep_num]['transcript_onsets'])[(self.config.window-1):]
@@ -163,7 +172,11 @@ class VLB_Dataset(Dataset):
 
                         for n in range(n_rows):
                             pad_len, inst_len, diag_len = run_maskval[n]
-                            run_lang_onsets[n][:diag_len] = run_tr_onsets[n] - run_lang_onsets[n][:diag_len]
+                            trial_lang_weights = np.array([
+                                get_hrf_weight(t) for t in run_tr_onsets[n] - run_lang_onsets[n][:diag_len]
+                            ])
+                            run_lang_onsets[n][:diag_len] = trial_lang_weights
+                            #run_lang_onsets[n][:diag_len] = run_tr_onsets[n] - run_lang_onsets[n][:diag_len]
 
                             with h5py.File(self.ll_path, "a") as f:
                                 group = f.create_group(f"{idx}")
@@ -174,13 +187,13 @@ class VLB_Dataset(Dataset):
                                     f"{idx}_vision", data=run_vision[n],
                                 )
                                 group.create_dataset(
-                                    f"{idx}_vis_diff2TR", data=run_vis_onsets,
+                                    f"{idx}_vis_weights", data=run_vis_weights,
                                 )
                                 group.create_dataset(
                                     f"{idx}_language", data=run_language[n],
                                 )
                                 group.create_dataset(
-                                    f"{idx}_lang_diff2TR", data=run_lang_onsets[n],
+                                    f"{idx}_lang_weights", data=run_lang_onsets[n],  # converted to weights
                                 )
                                 group.create_dataset(
                                     f"{idx}_padvals", data=run_maskval[n],
@@ -200,7 +213,7 @@ class VLB_Dataset(Dataset):
             self.ds_file = h5py.File(self.ll_path, "r")
         item = {}
         # TODO: validate this part w lit module train step
-        for mod in ['timeseries', 'vision', 'language', 'vis_diff2TR', 'lang_diff2TR']:
+        for mod in ['timeseries', 'vision', 'language', 'vis_weights', 'lang_weights']:
             item[mod] = torch.from_numpy(np.array(self.ds_file[f"{idx}"][f"{idx}_{mod}"])).float()
         item['padvals'] = np.array(self.ds_file[f"{idx}"][f"{idx}_padvals"]).tolist()
         #item['vision'] = [(item['vision'], 'video')]
