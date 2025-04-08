@@ -215,10 +215,10 @@ class VLB_Dataset(Dataset):
             self.ds_file = h5py.File(self.ll_path, "r")
         item = {}
         # TODO: validate this part w lit module train step
-        for mod in ['timeseries', 'vision', 'language', 'vis_weights', 'lang_weights']:
+        for mod in ['timeseries', 'vision', 'language']:
             item[mod] = torch.from_numpy(np.array(self.ds_file[f"{idx}"][f"{idx}_{mod}"])).float()
-        item['padvals'] = np.array(self.ds_file[f"{idx}"][f"{idx}_padvals"]).tolist()
-        #item['vision'] = [(item['vision'], 'video')]
+        for mod in ['padvals', 'vis_weights', 'lang_weights']:
+            item[mod] = np.array(self.ds_file[f"{idx}"][f"{idx}_{mod}"])
         return item
 
 

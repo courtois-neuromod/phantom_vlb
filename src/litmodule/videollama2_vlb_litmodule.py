@@ -149,7 +149,7 @@ class VLBLitModule(LightningModule):
         self.dropout = torch.nn.Dropout(self.config.dropout_rate)
 
 
-    def forward(self, x_video, x_lang, pad_idx, hrf_weights, attention_mask=None, hrf_weights=None):
+    def forward(self, x_video, x_lang, weight_mask, attention_mask=None):
         """."""
         # https://github.com/courtois-neuromod/phantom_LLM/blob/7258a5e95fe256d9ae4669dc5a1ca1be34a0d867/phantom_LLM/src/models/ridge_align.py#L76
 
@@ -218,17 +218,52 @@ class VLBLitModule(LightningModule):
 
         x_lang = batch["language"].long().to(self.config.device)  # tensor dim = (batch_size, num_feat,) dtype = torch.float32
 
-        # TODO: add to datamodule: derive time stamps and onset / offset idx for tokens based on absolute time diff (in secs) to target TR
-        pad_idx = int(batch["mask"])  # int, number of 0s adding added on the right side of the text input ids
         attention_mask = x_lang.ne(0).long().to(self.config.device)
+
+        weight_mask = make_weight_mask(
+            batch["padvals"],
+            batch["vis_weights"],
+            batch["lang_weights"],
+            x_lang.shape[1],
+            self.nnmodule.config.tokenizer_model_max_length,
+        )
+
+def make_weight_mask(pad_vals, vis_weight, lang_weight, lang_len, max_len):
+
+    feature_len = (vis_weight.shape[1]*13*13) + lang_len - 1
+    assert feature_len == max_len # padded so text + vis == 2048
+
+    weight_batch = []
+    for i in range(pad_vals.shape[0]):
+
+        pad_len, inst_len, diag_len = pad_vals[i]
+        # vis_weight each repeated 13*13 times consec
+        res = vis_weight[i] ?
+        assert vis_weight.shape[1]*13*13 === res.shape[0]
+
+        trial_w = np.concat(
+
+            np.zeros(pad left...),
+            # vis_weight each repeated 13*13 times consec
+            np.zeros(2 + inst_len),
+            lang_weights[i][:diag_len],
+            np.zeros(4 + pad_len),
+
+        )
+        weight_batch.append(torch.from_numpy(trial_w))
+    return torch.cat(weight_batch)
+    #TODO: account for batchsize
+    #return weight_mask
+
 
         # TODO: from timing sequence, obtain hrf_weights for sequence of hidden states from frames and words spoken in clip
         brain_encoding, l2_reg = self.forward(
              x_video,
              x_lang,
-             pad_idx,
+             weight_mask,
              attention_mask = attention_mask,
         )
+
         # From: prepare input ids for multimodal
         # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/c0bb03abf6b8a6b9a8dccac006fb4db5d4d9e414/videollama2/model/videollama2_arch.py#L161
 
