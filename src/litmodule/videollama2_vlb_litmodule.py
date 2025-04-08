@@ -9,7 +9,6 @@ import torch.nn.functional as F
 
 #from hydra.utils import instantiate
 from lightning.pytorch import LightningModule
-
 from torch.optim import Adam, AdamW, lr_scheduler
 from transformers import (
     AutoConfig,
@@ -87,6 +86,33 @@ def load_pretrained_vllama2(
     return model
 
 
+def make_weight_mask(pad_vals, vis_weights, lang_weights, lang_len, max_len, dtype):
+
+    feature_len = (vis_weights.shape[1]*13*13) + lang_len - 1
+    assert feature_len == max_len # padded so text + vis == 2048
+
+    weight_batch = []
+    for i in range(pad_vals.shape[0]):
+
+        pad_len, inst_len, dialog_len = pad_vals[i]
+
+        trial_weights = torch.cat([
+            vis_weights[i].repeat_interleave(13*13).to(dtype),
+            torch.zeros(2 + inst_len).to(dtype),
+            lang_weights[i][:dialog_len].to(dtype),
+            torch.zeros(4 + pad_len).to(dtype),
+        ], dim=0)
+
+        pad_left = feature_len - trial_weights.shape[0]
+        weight_batch.append(
+            torch.cat([
+                torch.zeros(pad_left).to(dtype),
+                trial_weights,
+            ], dim=0).unsqueeze(dim=0)
+        )
+
+    return torch.cat(weight_batch, dim=0)
+
 
 @dataclass
 class VLBLitModuleConfig:
@@ -137,6 +163,10 @@ class VLBLitModule(LightningModule):
         self.config: VLBLitModuleConfig = config
 
         self.nnmodule = load_pretrained_vllama2(self.config)
+        kwargs = {
+            "device": self.config.device,
+            "dtype": self.config.dtype,
+        }
 
         # https://github.com/courtois-neuromod/phantom_LLM/blob/7258a5e95fe256d9ae4669dc5a1ca1be34a0d867/phantom_LLM/src/models/ridge_align.py#L76
         self.hrf_layer = HRFConvolveLayer()
@@ -144,8 +174,9 @@ class VLBLitModule(LightningModule):
             self.nnmodule.config.hidden_size,
             self.config.num_target,  # brain target voxel count or parcel count
             self.config.l2_lambda,
+            **kwargs,
         )
-        self.layer_norm = torch.nn.LayerNorm(self.nnmodule.config.hidden_size)  # embedding dim == 4096 for vllama2
+        self.layer_norm = torch.nn.LayerNorm(self.nnmodule.config.hidden_size, **kwargs)  # embedding dim == 4096 for vllama2
         self.dropout = torch.nn.Dropout(self.config.dropout_rate)
 
 
@@ -169,7 +200,7 @@ class VLBLitModule(LightningModule):
         where 4096 is hidden dim size, and 1183 is the sequence lenght for 12 frames of 336x336 video input  (169*7 = 1183...)
         """
         # outputs (from last hidden layer); remove padding... (depends on batch size...)
-        hidden_states = outputs.hidden_states[-1][:, :-pad_idx, :]#.detach().cpu().numpy()
+        hidden_states = outputs.hidden_states[-1]#.detach().cpu().numpy()
         # detach? from:
         # https://github.com/courtois-neuromod/video_transformer/blob/0906e9a71a2fdb511190f7a757c8aadcb1f6c990/scripts/apply_gpt_ridge_encoding.py#L26
         hidden_states = self.layer_norm(hidden_states)
@@ -180,15 +211,13 @@ class VLBLitModule(LightningModule):
         # video_gpt: pca, ridge on brain encooding
         # https://github.com/courtois-neuromod/video_transformer/blob/0906e9a71a2fdb511190f7a757c8aadcb1f6c990/scripts/apply_gpt_ridge_encoding.py#L96
 
-        # Apply HRF Convolution ?
-        # TODO: derive hrf weights based on frames and text timing relative to target (create function to derive distances)
-        # TODO: derive and pass down index for onset of visual frame and offset of within-TRs text tokens
-        # TODO: how to handle batch sizes > 1...
+        # Apply HRF Convolution ?...
+        # TODO: figure out squeezing, output dim... (depends batch size)
         hrf_embeddings = self.dropout(
-            self.hrf_layer(hidden_states[:, on_seq:off_seq , :], hrf_weights).squeeze(1)
+            self.hrf_layer(hidden_states, weight_mask)#.squeeze(1)
         )
 
-        # Remove the singleton dimension
+        # Remove the singleton dimension (NEEDED?)
         hrf_embeddings = hrf_embeddings.squeeze(-1)
         # print(f"HRF embeddings shape after squeeze: {hrf_embeddings.shape}")
 
@@ -221,42 +250,14 @@ class VLBLitModule(LightningModule):
         attention_mask = x_lang.ne(0).long().to(self.config.device)
 
         weight_mask = make_weight_mask(
-            batch["padvals"],
+            batch["padvals"].numpy(),
             batch["vis_weights"],
             batch["lang_weights"],
             x_lang.shape[1],
             self.nnmodule.config.tokenizer_model_max_length,
-        )
+            self.config.dtype,
+        ).to(self.config.device)
 
-def make_weight_mask(pad_vals, vis_weight, lang_weight, lang_len, max_len):
-
-    feature_len = (vis_weight.shape[1]*13*13) + lang_len - 1
-    assert feature_len == max_len # padded so text + vis == 2048
-
-    weight_batch = []
-    for i in range(pad_vals.shape[0]):
-
-        pad_len, inst_len, diag_len = pad_vals[i]
-        # vis_weight each repeated 13*13 times consec
-        res = vis_weight[i] ?
-        assert vis_weight.shape[1]*13*13 === res.shape[0]
-
-        trial_w = np.concat(
-
-            np.zeros(pad left...),
-            # vis_weight each repeated 13*13 times consec
-            np.zeros(2 + inst_len),
-            lang_weights[i][:diag_len],
-            np.zeros(4 + pad_len),
-
-        )
-        weight_batch.append(torch.from_numpy(trial_w))
-    return torch.cat(weight_batch)
-    #TODO: account for batchsize
-    #return weight_mask
-
-
-        # TODO: from timing sequence, obtain hrf_weights for sequence of hidden states from frames and words spoken in clip
         brain_encoding, l2_reg = self.forward(
              x_video,
              x_lang,

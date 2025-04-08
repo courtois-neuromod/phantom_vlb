@@ -55,10 +55,10 @@ class HRFConvolveLayer(nn.Module):
 
 
 class RidgeRegressionLayer(nn.Module):
-    def __init__(self, input_dim, output_dim, l2_lambda=0.01):
+    def __init__(self, input_dim, output_dim, l2_lambda=0.01, **kwargs):
         super(RidgeRegressionLayer, self).__init__()
-        self.linear = nn.Linear(input_dim, output_dim, bias=True)
-        self.layer_norm = nn.LayerNorm(output_dim)
+        self.linear = nn.Linear(input_dim, output_dim, bias=True, **kwargs)
+        self.layer_norm = nn.LayerNorm(output_dim, **kwargs)
         self.l2_lambda = l2_lambda
 
     def forward(self, x, add_regularization=True):
