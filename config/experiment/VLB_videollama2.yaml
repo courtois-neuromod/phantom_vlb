@@ -42,13 +42,16 @@ litmodule:
 trainer:
   _target_: pytorch_lightning.Trainer
   strategy: auto
+  max_epochs: 150
+  precision: 16
+  gradient_clip_val: 1
 
 
 logger:
   _target_: pytorch_lightning.loggers.CometLogger
   experiment_name: vllama2_vlb_friends_logs
+  workspace: mariestlaurent
   online: False
-
 
 
 output_dir: ./results/videollama2/brain_finetune/friends/lightning_ckpt
