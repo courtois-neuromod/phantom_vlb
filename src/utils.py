@@ -58,12 +58,12 @@ class RidgeRegressionLayer(nn.Module):
     def __init__(self, input_dim, output_dim, l2_lambda=0.01, **kwargs):
         super(RidgeRegressionLayer, self).__init__()
         self.linear = nn.Linear(input_dim, output_dim, bias=True, **kwargs)
-        self.layer_norm = nn.LayerNorm(output_dim, **kwargs)
+        #self.layer_norm = nn.LayerNorm(output_dim, **kwargs)
         self.l2_lambda = l2_lambda
 
     def forward(self, x, add_regularization=True):
         output = self.linear(x)
-        output = self.layer_norm(output)  # Normalize the output
+        #output = self.layer_norm(output)  # Normalize the output
         if add_regularization:
             l2_reg = self.l2_lambda * torch.norm(self.linear.weight, p=2) ** 2
             return output, l2_reg

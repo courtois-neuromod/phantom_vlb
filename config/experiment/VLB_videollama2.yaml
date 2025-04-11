@@ -39,6 +39,18 @@ litmodule:
     last_epoch: -1
     t_max: 50000
 
+trainer:
+  _target_: pytorch_lightning.Trainer
+  strategy: auto
+
+
+logger:
+  _target_: pytorch_lightning.loggers.CometLogger
+  experiment_name: vllama2_vlb_friends_logs
+  online: False
+
+
+
 output_dir: ./results/videollama2/brain_finetune/friends/lightning_ckpt
 
 name: vllama2_vlb_friends

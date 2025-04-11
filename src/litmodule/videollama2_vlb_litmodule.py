@@ -176,7 +176,8 @@ class VLBLitModule(LightningModule):
             self.config.l2_lambda,
             **kwargs,
         )
-        self.layer_norm = torch.nn.LayerNorm(self.nnmodule.config.hidden_size, **kwargs)  # embedding dim == 4096 for vllama2
+        self.layer_norm1 = torch.nn.LayerNorm(self.nnmodule.config.hidden_size, **kwargs)  # embedding dim == 4096 for vllama2
+        self.layer_norm2 = torch.nn.LayerNorm(self.nnmodule.config.hidden_size, **kwargs)  # embedding dim == 4096 for vllama2
         self.dropout = torch.nn.Dropout(self.config.dropout_rate)
 
 
@@ -199,54 +200,46 @@ class VLBLitModule(LightningModule):
         connector output (temporally agregated video features) are of dim torch.Size([1, 1183, 4096])
         where 4096 is hidden dim size, and 1183 is the sequence lenght for 12 frames of 336x336 video input  (169*7 = 1183...)
         """
-        # outputs (from last hidden layer); remove padding... (depends on batch size...)
-        hidden_states = outputs.hidden_states[-1]#.detach().cpu().numpy()
-        # detach? from:
-        # https://github.com/courtois-neuromod/video_transformer/blob/0906e9a71a2fdb511190f7a757c8aadcb1f6c990/scripts/apply_gpt_ridge_encoding.py#L26
-        hidden_states = self.layer_norm(hidden_states)
+        # outputs (from last hidden layer)
+        hidden_states = self.layer_norm1(outputs.hidden_states[-1])
 
-        # to convolve, use
-        # pad_idx = number of 0s padded to the right of the input_ids (use it to mask output hidden_states[i, :-pad_idx[i], :])
-
-        # video_gpt: pca, ridge on brain encooding
+        # video_gpt: pca, ridge on brain encooding (but not w gradient descent)
         # https://github.com/courtois-neuromod/video_transformer/blob/0906e9a71a2fdb511190f7a757c8aadcb1f6c990/scripts/apply_gpt_ridge_encoding.py#L96
 
-        # Apply HRF Convolution ?...
+        # Apply HRF Convolution
         # TODO: figure out squeezing, output dim... (depends batch size)
-        hrf_embeddings = self.dropout(
-            self.hrf_layer(hidden_states, weight_mask)#.squeeze(1)
-        )
+        hrf_embeddings = self.layer_norm2(
+            self.dropout(
+                self.hrf_layer(hidden_states, weight_mask,
+                )#.squeeze(1)
+        ))
 
         # Remove the singleton dimension (NEEDED?)
-        hrf_embeddings = hrf_embeddings.squeeze(-1)
+        #hrf_embeddings = hrf_embeddings.squeeze(-1)
         # print(f"HRF embeddings shape after squeeze: {hrf_embeddings.shape}")
 
         # Apply Ridge Regression
         regression_output, l2_reg = self.ridge_layer(hrf_embeddings)
-        # print(f"Ridge Regression output shape: {regression_output.shape}")
 
         return regression_output, l2_reg
 
 
     def training_step(self, batch):
-        # TODO: how to deal w batch structure from data module??
         """
-        Note: the DataLoader creates batches based on Dataset's __getitems__
-        If it returns tensors, then those are stacked
-        If it returns a dictionary, items get stacked under each key, and can
+        Note: the DataLoader creates batches based on the Dataset's __getitems__
+        If it returns tensors, then those are stacked by the Datamodule
+
+        If it returns a dictionary, items get stacked under each given key, and can
         get called by that key from a batch dictionary. E.g. here "timeseries", "vision", "language"
         """
-        # batch["vision"]: # list[tuple] of len == batch size
-        # each tuple in the list is (tensor , 'video'),
-        # where tensor is (dim = (12, 3, 336, 336), dtype = torch.float32)
-
-        # videollama2 inference
+        # Adapted from videollama2 inference
         # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/__init__.py#L32
         # image_or_video (torch.Tensor): image tensor (1, C, H, W) / video tensor (T, C, H, W).
+        # From VLLaMA2 code: prepare input ids for multimodal
+        # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/c0bb03abf6b8a6b9a8dccac006fb4db5d4d9e414/videollama2/model/videollama2_arch.py#L161
         x_video = [(batch["vision"][i].to(self.config.dtype).to(self.config.device), "video") for i in range(batch["vision"].shape[0])]
 
         x_lang = batch["language"].long().to(self.config.device)  # tensor dim = (batch_size, num_feat,) dtype = torch.float32
-
         attention_mask = x_lang.ne(0).long().to(self.config.device)
 
         weight_mask = make_weight_mask(
@@ -265,22 +258,55 @@ class VLBLitModule(LightningModule):
              attention_mask = attention_mask,
         )
 
-        # From: prepare input ids for multimodal
-        # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/c0bb03abf6b8a6b9a8dccac006fb4db5d4d9e414/videollama2/model/videollama2_arch.py#L161
-
-        #y = batch["timeseries"].cuda()  # dim = (batch_size, 1000,) dtype = torch.float32
         y = batch["timeseries"].to(self.config.dtype).to(self.config.device)  # dim = (batch_size, 1000,) dtype = torch.float32
 
-        # From phantom_LLM: two alternatives, cosine similarity loss and
-        # https://github.com/courtois-neuromod/phantom_LLM/blob/5505873e190b4b4b1c8103daf02d68fa37e0156e/phantom_LLM/src/run_training_brain_corpus.py#L160
+        """
+        Implement loss function...
+        From phantom_LLM: two alternatives, cosine similarity loss and mean square error
+        https://github.com/courtois-neuromod/phantom_LLM/blob/5505873e190b4b4b1c8103daf02d68fa37e0156e/phantom_LLM/src/run_training_brain_corpus.py#L160
+
         brain_loss = (1 - F.cosine_similarity(brain_encoding, y, dim=-1).mean()) + l2_reg
         brain_loss = torch.nn.MSELoss(brain_encoding, y) + l2_reg
 
-        # From video_gpt
-        # https://github.com/courtois-neuromod/video_transformer/blob/0906e9a71a2fdb511190f7a757c8aadcb1f6c990/src/videogpt/vqvae_ba.py#L121
-        brain_loss = F.mse_loss(brain_encoding, y)
+        From video_gpt:
+        https://github.com/courtois-neuromod/video_transformer/blob/0906e9a71a2fdb511190f7a757c8aadcb1f6c990/src/videogpt/vqvae_ba.py#L121
+        brain_loss = F.mse_loss(brain_encoding, y) + l2_reg
+        """
+        brain_loss = F.mse_loss(brain_encoding, y) + l2_reg
 
         self.log("train/brain_loss", brain_loss)
+
+        return brain_loss
+
+
+    def validation_step(self, batch):
+        """."""
+        x_video = [
+            (batch["vision"][i].to(self.config.dtype).to(self.config.device), "video") for i in range(batch["vision"].shape[0])
+        ]
+
+        x_lang = batch["language"].long().to(self.config.device)
+        attention_mask = x_lang.ne(0).long().to(self.config.device)
+
+        weight_mask = make_weight_mask(
+            batch["padvals"].numpy(),
+            batch["vis_weights"],
+            batch["lang_weights"],
+            x_lang.shape[1],
+            self.nnmodule.config.tokenizer_model_max_length,
+            self.config.dtype,
+        ).to(self.config.device)
+
+        brain_encoding, l2_reg = self.forward(
+             x_video,
+             x_lang,
+             weight_mask,
+             attention_mask = attention_mask,
+        )
+
+        y = batch["timeseries"].to(self.config.dtype).to(self.config.device)
+        brain_loss = F.mse_loss(brain_encoding, y) + l2_reg
+        self.log("val/brain_loss", brain_loss)
 
         return brain_loss
 
