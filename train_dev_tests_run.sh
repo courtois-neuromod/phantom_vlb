@@ -12,6 +12,7 @@
 
 # load modules required for your script to work
 module load python/3.10.13
+module load httpproxy  # comet can be used online from beluga after loading this module
 
 # activate project's virtual env
 source /home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/vllama2_venv/bin/activate
@@ -28,4 +29,4 @@ SUBNUM="sub-${1}"
 TEMP_PATH="/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/temp_files/friends_{$SUBNUM}_*_llFile.h5"
 rsync -tv --info=progress2 $TEMP_PATH $SLURM_TMPDIR/
 
-python -m train_dev_tests experiment=VLB_videollama2 subject=$SUBNUM
+python -m train_dev_tests experiment=VLB_vllama2_friends subject=$SUBNUM

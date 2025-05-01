@@ -4,6 +4,7 @@ random_state: 1234
 defaults:
   - _self_
   - experiment: null
+  - logger: comet
 
 output_dir: ./results
 cache_dir: ./models

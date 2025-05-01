@@ -89,6 +89,9 @@ target/
 data/*
 models/*
 results/*
+config/logger/*
+comet/*
+outputs/*
 slurm_files/*
 temp_files/*
 

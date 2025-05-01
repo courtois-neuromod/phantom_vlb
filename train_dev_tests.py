@@ -6,11 +6,8 @@ import subprocess
 from pathlib import Path
 
 import hydra
-from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
-
-#import wandb
 
 """
 Sources (adapted from / inspired by):
@@ -70,15 +67,7 @@ def train(config: DictConfig) -> None:
 
     pl.seed_everything(config.random_state)
 
-    #logger: WandbLogger = instantiate(
-    #    config.logger,
-    #    offline=(
-    #        HydraConfig.get().launcher._target_
-    #        == "hydra_plugins.hydra_submitit_launcher.submitit_launcher."
-    #        "SlurmLauncher"
-    #    ),
-    #)
-    # try instead: https://www.comet.com/site/
+    # try comet logger: https://www.comet.com/site/
     #
     # Comet quick quide
     # https://www.comet.com/mariestlaurent/quick-start?fromGetStarted=true
@@ -115,9 +104,10 @@ def train(config: DictConfig) -> None:
     ]
 
     logger = instantiate(
-        config.logger,
-        save_dir=f"{os.getcwd()}/logs",
+        config.exp_logger,
+        #save_dir=f"{os.getcwd()}/logs",  # only for offline mode, if I understand
     )
+    logger.log_hyperparams(dict(config))
 
     # instantiates datamodule config within datamodule class from config params
     datamodule = instantiate(
@@ -140,35 +130,25 @@ def train(config: DictConfig) -> None:
         f"Best model saved at {callbacks[0].best_model_path}, \
            with a val loss of {callbacks[0].best_model_score}"
     )
-    #trainer.save_checkpoint(config.output_dir)
+    trainer.save_checkpoint(config.output_dir)
 
-    # TODO: save checkpoints?... trainer params?
+
     # TODO: implement LoRA
     # TODO: Comet: how to log, save, view results (offline mode)
     # https://www.comet.com/mariestlaurent/quick-start?fromGetStarted=true
     # https://lightning.ai/docs/pytorch/stable/extensions/generated/lightning.pytorch.loggers.CometLogger.html
 
-    #return trainer.validate(
-    #    model=litmodule,
-    #    datamodule=datamodule,
-    #)[0]["val/brain_loss"]
+    return trainer.validate(
+        model=litmodule,
+        datamodule=datamodule,
+    )[0]["val/brain_loss"]
 
 
 if __name__ == "__main__":
-    # Retrieve the W&B key.
-    #with Path("./wandb/WANDB_KEY.txt").resolve().open(
-    #    "r",
-    #) as f:
-    #    key = f.read().strip()
-
-    # TODO: retrieve Comet API key...
-
-    # Login to W&B.
-    #wandb.login(key=key)
 
     # Train (fine-tune).
     out = train()
 
     # If the main function returns a configuation, save it.
-    #if out:
-    #    OmegaConf.save(out, "out.yaml")
+    if out:
+        OmegaConf.save(out, "out.yaml")
