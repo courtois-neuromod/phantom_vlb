@@ -50,7 +50,7 @@ exp_logger:
   _target_: pytorch_lightning.loggers.CometLogger
   api_key: ${my_api_key}
   workspace: ${my_workspace}
-  project: phantom_mm
+  project_name: phantom_mm
   name: vllama2_vlb_friends_logs
 
 output_dir: ./results/videollama2/brain_finetune/friends/lightning_ckpt
