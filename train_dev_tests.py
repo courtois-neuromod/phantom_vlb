@@ -1,14 +1,3 @@
-"""."""
-
-import logging
-import os
-import subprocess
-from pathlib import Path
-
-import hydra
-from hydra.utils import instantiate
-from omegaconf import DictConfig, OmegaConf
-
 """
 Sources (adapted from / inspired by):
 cneuromax_old (local branch)
@@ -17,6 +6,15 @@ https://github.com/courtois-neuromod/video_transformer/blob/main/scripts/train_v
 https://github.com/courtois-neuromod/phantom_LLM/blob/dev_align/phantom_LLM/src/models/run_baseline.py
 https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L248
 """
+
+import logging
+import os
+
+#import subprocess
+#from pathlib import Path
+import hydra
+from hydra.utils import instantiate
+from omegaconf import DictConfig, OmegaConf
 
 
 @hydra.main(
@@ -131,7 +129,6 @@ def train(config: DictConfig) -> None:
            with a val loss of {callbacks[0].best_model_score}"
     )
     trainer.save_checkpoint(config.output_dir)
-
 
     # TODO: implement LoRA
     # TODO: Comet: how to log, save, view results (offline mode)
