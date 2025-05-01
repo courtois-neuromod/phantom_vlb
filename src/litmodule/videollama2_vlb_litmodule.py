@@ -313,7 +313,7 @@ class VLBLitModule(LightningModule):
 
     def configure_optimizers(
         self: "VLBLitModule",
-    ) -> tuple[list[Optimizer], list[dict[str, LRScheduler | str | int]]]:
+    ):
         """.
         see also:
         https://github.com/courtois-neuromod/video_transformer/blob/0906e9a71a2fdb511190f7a757c8aadcb1f6c990/src/videogpt/vqvae_ba.py#L165
