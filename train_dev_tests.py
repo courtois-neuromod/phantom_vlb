@@ -12,6 +12,7 @@ import os
 
 #import subprocess
 #from pathlib import Path
+import comet_ml
 import hydra
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
