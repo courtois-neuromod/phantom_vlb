@@ -40,14 +40,20 @@ litmodule:
     t_max: 50000
 
 trainer:
-  _target_: pytorch_lightning.Trainer
-  strategy: auto
-  max_epochs: 150
-  precision: 16
+  _target_: lightning.pytorch.Trainer
+  strategy: "ddp"
+  precision: "16-mixed"
+  accelerator: "gpu"
   gradient_clip_val: 1
+  devices: 3
+  num_nodes: 1
+  max_epochs: 150
+  max_steps: Null
+  val_check_interval: 2
+  log_every_n_steps: 2
 
 exp_logger:
-  _target_: pytorch_lightning.loggers.CometLogger
+  _target_: lightning.pytorch.loggers.CometLogger
   api_key: ${my_api_key}
   workspace: ${my_workspace}
   project_name: phantom_mm

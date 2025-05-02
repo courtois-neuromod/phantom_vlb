@@ -46,7 +46,7 @@ def train(config: DictConfig) -> None:
     os.environ["TRANSFORMERS_CACHE"] = config.cache_dir
 
     import pytorch_lightning as pl
-    from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
+    from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 
     #from lightning.pytorch.loggers.wandb import WandbLogger
     #from pytorch_lightning import Trainer
