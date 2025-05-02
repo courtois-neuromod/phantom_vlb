@@ -204,8 +204,12 @@ class VLB_Dataset(Dataset):
 
                 f_file.close()
 
+            with h5py.File(self.ll_path, "a") as f:
+                f.create_dataset("dset_len", data=[idx+1])
+
         with h5py.File(self.ll_path, "r") as f:
-            self.length = max([int(s) for s in f.keys()]) + 1
+            #self.length = max([int(s) for s in f.keys()]) + 1
+            self.length = np.array(f["dset_len"])[0]
 
     def __len__(self):
         return self.length
