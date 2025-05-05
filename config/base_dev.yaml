@@ -6,6 +6,6 @@ defaults:
   - experiment: null
   - logger: comet
 
-output_dir: /home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/results
-cache_dir: /home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/models
+output_dir: ./results
+cache_dir: ./models
 
