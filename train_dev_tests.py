@@ -44,7 +44,7 @@ def train(config: DictConfig) -> None:
     #os.environ['HF_HOME'] = '/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/models/'
     #os.environ["TRANSFORMERS_CACHE"] = "/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/models"
     os.environ['HF_HOME'] = config.cache_dir
-    #os.environ["TRANSFORMERS_CACHE"] = config.cache_dir
+    os.environ["TRANSFORMERS_CACHE"] = config.cache_dir
 
     import pytorch_lightning as pl
     from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
