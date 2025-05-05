@@ -8,6 +8,7 @@ https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50
 """
 
 import logging
+import multiprocessing as mp
 import os
 
 #import subprocess
@@ -43,7 +44,7 @@ def train(config: DictConfig) -> None:
     #os.environ['HF_HOME'] = '/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/models/'
     #os.environ["TRANSFORMERS_CACHE"] = "/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/models"
     os.environ['HF_HOME'] = config.cache_dir
-    os.environ["TRANSFORMERS_CACHE"] = config.cache_dir
+    #os.environ["TRANSFORMERS_CACHE"] = config.cache_dir
 
     import pytorch_lightning as pl
     from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
@@ -111,6 +112,10 @@ def train(config: DictConfig) -> None:
     )
     logger.log_hyperparams(dict(config))
 
+    """
+    doc on params:
+    https://lightning.ai/docs/pytorch/stable/common/trainer.html
+    """
     trainer = instantiate(
         config.trainer,
         logger=logger,
@@ -146,6 +151,12 @@ def train(config: DictConfig) -> None:
 
 
 if __name__ == "__main__":
+
+    """
+    Implementing spawn method instead of default fork method
+    https://github.com/pytorch/pytorch/issues/40403
+    """
+    mp.set_start_method('spawn', force=True)
 
     # Train (fine-tune).
     out = train()
