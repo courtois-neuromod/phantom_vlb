@@ -142,6 +142,7 @@ class VLBLitModuleConfig:
 
     def __post_init__(self):
         self.dtype = torch.float16  # torch.bfloat16 for newer GPUs
+        #self.device = "cpu"
         #self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.device_map="auto"
 
@@ -163,6 +164,17 @@ class VLBLitModule(LightningModule):
 
         self.config: VLBLitModuleConfig = config
 
+
+    def configure_model(
+        self: "VLBLitModule",
+    ) -> None:
+        """
+        When training model on multiple GPUs with FSDP with lightening,
+        do not instantiate large layers in __init__() .
+        Instead, delay the creation of large layers to the configure_model() hook.
+        Source
+        https://lightning.ai/docs/pytorch/stable/advanced/model_init.html#model-parallel-training-fsdp-and-deepspeed
+        """
         self.nnmodule = load_pretrained_vllama2(self.config)
         kwargs = {
             #"device": self.config.device,

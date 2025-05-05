@@ -48,6 +48,15 @@ def train(config: DictConfig) -> None:
     import pytorch_lightning as pl
     from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 
+    """
+    Lightning training on multiple GPUs
+    https://pytorch-lightning.readthedocs.io/en/0.8.5/multi_gpu.html
+
+    Lightning strategies
+    https://lightning.ai/docs/pytorch/stable/extensions/strategy.html
+    https://lightning.ai/docs/pytorch/stable/advanced/model_parallel/fsdp.html
+    """
+
     #from lightning.pytorch.loggers.wandb import WandbLogger
     #from pytorch_lightning import Trainer
     #from pytorch_lightning.loggers import CometLogger
@@ -93,12 +102,6 @@ def train(config: DictConfig) -> None:
             mode="min",
             save_last=True,
         ),
-        ModelCheckpoint(
-            monitor="val/brain_loss",
-            filename="best_brainenc_{epoch}-{step}",
-            mode="min",
-            save_last=False,
-        ),
         LearningRateMonitor(logging_interval="epoch"),
     ]
 
@@ -107,6 +110,12 @@ def train(config: DictConfig) -> None:
         #save_dir=f"{os.getcwd()}/logs",  # only for offline mode, if I understand
     )
     logger.log_hyperparams(dict(config))
+
+    trainer = instantiate(
+        config.trainer,
+        logger=logger,
+        callbacks=callbacks,
+    )
 
     # instantiates datamodule config within datamodule class from config params
     datamodule = instantiate(
@@ -117,19 +126,13 @@ def train(config: DictConfig) -> None:
         config.litmodule,
     )
 
-    trainer = instantiate(
-        config.trainer,
-        logger=logger,
-        callbacks=callbacks,
-    )
-
     trainer.fit(model=litmodule, datamodule=datamodule)
 
-    logging.info(
-        f"Best model saved at {callbacks[0].best_model_path}, \
-           with a val loss of {callbacks[0].best_model_score}"
-    )
-    trainer.save_checkpoint(config.output_dir)
+    #logging.info(
+    #    f"Best model saved at {callbacks[0].best_model_path}, \
+    #       with a val loss of {callbacks[0].best_model_score}"
+    #)
+    #trainer.save_checkpoint(config.output_dir)
 
     # TODO: implement LoRA
     # TODO: Comet: how to log, save, view results (offline mode)

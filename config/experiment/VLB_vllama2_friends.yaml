@@ -41,15 +41,15 @@ litmodule:
 
 trainer:
   _target_: lightning.pytorch.Trainer
-  strategy: "ddp"
+  strategy: "fsdp"
   precision: "16-mixed"
-  accelerator: "gpu"
+  accelerator: "cuda"
   gradient_clip_val: 1
   devices: 3
   num_nodes: 1
   max_epochs: 150
   max_steps: Null
-  val_check_interval: 2
+  val_check_interval: 1
   log_every_n_steps: 2
 
 exp_logger:
