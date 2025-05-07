@@ -50,7 +50,9 @@ def train(config: DictConfig) -> None:
     import pytorch_lightning as pl
     from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
     from lightning.pytorch.strategies import FSDPStrategy
-    from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
+
+    #from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
+    from torch.nn import Conv3d, Linear
     from transformers.models.mistral.modeling_mistral import MistralDecoderLayer
 
     """
@@ -119,13 +121,23 @@ def train(config: DictConfig) -> None:
     """
     doc on params:
     https://lightning.ai/docs/pytorch/stable/common/trainer.html
+    https://github.com/pytorch/pytorch/blob/7cf8049d63ee7e8632f2e7332a654d4f2b9550a4/torch/distributed/fsdp/wrap.py#L143
+    https://www.restack.io/p/pytorch-lightning-answer-fsdp-tutorial-cat-ai
+    https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.strategies.FSDPStrategy.html
+    https://pytorch.org/blog/introducing-pytorch-fully-sharded-data-parallel-api/
+    https://docs.pytorch.org/tutorials/intermediate/FSDP_adavnced_tutorial.html
+    https://github.com/pytorch/pytorch/blob/7cf8049d63ee7e8632f2e7332a654d4f2b9550a4/torch/distributed/fsdp/wrap.py#L295
     """
-    auto_wrap_policy = transformer_auto_wrap_policy({MistralDecoderLayer})
+    #auto_wrap_policy = transformer_auto_wrap_policy(
+    #    {MistralDecoderLayer},
+    #)
 
     trainer = instantiate(
         config.trainer,
         strategy=FSDPStrategy(
-            auto_wrap_policy=auto_wrap_policy,
+            #wrapping_policy=["Linear", "Conv2d"]
+            #auto_wrap_policy=auto_wrap_policy,
+            auto_wrap_policy={MistralDecoderLayer, Conv3d, Linear},
             activation_checkpointing_policy={MistralDecoderLayer},
             cpu_offload=False,
         ),
