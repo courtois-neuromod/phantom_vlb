@@ -45,13 +45,14 @@ def train(config: DictConfig) -> None:
     #os.environ["TRANSFORMERS_CACHE"] = "/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/models"
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
     os.environ['HF_HOME'] = config.cache_dir
-    os.environ["TRANSFORMERS_CACHE"] = config.cache_dir
+    #os.environ["TRANSFORMERS_CACHE"] = config.cache_dir
 
     import pytorch_lightning as pl
     from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
     from lightning.pytorch.strategies import FSDPStrategy
 
     #from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
+    from torch.distributed.fsdp.wrap import size_based_auto_wrap_policy
     from torch.nn import Conv3d, Linear
     from transformers.models.mistral.modeling_mistral import MistralDecoderLayer
 
@@ -137,9 +138,10 @@ def train(config: DictConfig) -> None:
         strategy=FSDPStrategy(
             #wrapping_policy=["Linear", "Conv2d"]
             #auto_wrap_policy=auto_wrap_policy,
-            auto_wrap_policy={MistralDecoderLayer, Conv3d, Linear},
-            activation_checkpointing_policy={MistralDecoderLayer},
-            cpu_offload=False,
+            #auto_wrap_policy={MistralDecoderLayer, Conv3d, Linear},
+            auto_wrap_policy=size_based_auto_wrap_policy,
+            activation_checkpointing_policy={MistralDecoderLayer, Conv3d, Linear},
+            cpu_offload=True,
         ),
         logger=logger,
         callbacks=callbacks,

@@ -17,7 +17,7 @@ datamodule:
     subject: ${subject}
     random_state: ${random_state}
     batch_size: 1
-    num_workers: 3
+    num_workers: 1
     shuffle_val_data: True
 
 litmodule:
@@ -44,7 +44,7 @@ trainer:
   precision: "16-mixed"
   accelerator: "gpu"
   gradient_clip_val: 1
-  devices: 3
+  devices: 4
   num_nodes: 1
   max_epochs: 150
   max_steps: Null
