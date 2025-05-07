@@ -41,9 +41,8 @@ litmodule:
 
 trainer:
   _target_: lightning.pytorch.Trainer
-  strategy: "fsdp"
   precision: "16-mixed"
-  accelerator: "cuda"
+  accelerator: "gpu"
   gradient_clip_val: 1
   devices: 3
   num_nodes: 1

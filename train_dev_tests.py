@@ -49,6 +49,9 @@ def train(config: DictConfig) -> None:
 
     import pytorch_lightning as pl
     from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
+    from lightning.pytorch.strategies import FSDPStrategy
+    from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
+    from transformers.models.mistral.modeling_mistral import MistralDecoderLayer
 
     """
     Lightning training on multiple GPUs
@@ -117,8 +120,15 @@ def train(config: DictConfig) -> None:
     doc on params:
     https://lightning.ai/docs/pytorch/stable/common/trainer.html
     """
+    auto_wrap_policy = transformer_auto_wrap_policy({MistralDecoderLayer})
+
     trainer = instantiate(
         config.trainer,
+        strategy=FSDPStrategy(
+            auto_wrap_policy=auto_wrap_policy,
+            activation_checkpointing_policy={MistralDecoderLayer},
+            cpu_offload=False,
+        ),
         logger=logger,
         callbacks=callbacks,
     )
