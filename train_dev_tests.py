@@ -181,7 +181,7 @@ if __name__ == "__main__":
     Implementing spawn method instead of default fork method
     https://github.com/pytorch/pytorch/issues/40403
     """
-    mp.set_start_method('spawn', force=True)
+    #mp.set_start_method('spawn', force=True)
 
     # Train (fine-tune).
     out = train()
