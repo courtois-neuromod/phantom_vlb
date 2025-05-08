@@ -17,7 +17,7 @@ datamodule:
     subject: ${subject}
     random_state: ${random_state}
     batch_size: 1
-    num_workers: 1
+    num_workers: 0
     shuffle_val_data: True
 
 litmodule:

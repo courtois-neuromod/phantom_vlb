@@ -56,6 +56,8 @@ def train(config: DictConfig) -> None:
     from torch.nn import Conv3d, Linear
     from transformers.models.mistral.modeling_mistral import MistralDecoderLayer
 
+    from src import HRFConvolveLayer, RidgeRegressionLayer
+
     """
     Lightning training on multiple GPUs
     https://pytorch-lightning.readthedocs.io/en/0.8.5/multi_gpu.html
@@ -140,7 +142,9 @@ def train(config: DictConfig) -> None:
             #auto_wrap_policy=auto_wrap_policy,
             #auto_wrap_policy={MistralDecoderLayer, Conv3d, Linear},
             auto_wrap_policy=size_based_auto_wrap_policy,
-            activation_checkpointing_policy={MistralDecoderLayer, Conv3d, Linear},
+            activation_checkpointing_policy={
+                MistralDecoderLayer, Conv3d, Linear, HRFConvolveLayer, RidgeRegressionLayer,
+            },
             cpu_offload=True,
         ),
         logger=logger,
@@ -181,7 +185,7 @@ if __name__ == "__main__":
     Implementing spawn method instead of default fork method
     https://github.com/pytorch/pytorch/issues/40403
     """
-    #mp.set_start_method('spawn', force=True)
+    mp.set_start_method('spawn', force=True)
 
     # Train (fine-tune).
     out = train()

@@ -5,7 +5,7 @@
 #SBATCH --error=/project/rrg-pbellec/mstlaure/phantom_vlb/slurm_files/slurm-%A_%a.err
 #SBATCH --time=12:00:00
 #SBATCH --cpus-per-task=32
-#SBATCH --gpus-per-node=v100:1
+#SBATCH --gpus-per-node=v100:4
 #SBATCH --mem-per-cpu=4000M
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=marie.stl@gmail.com
@@ -29,4 +29,6 @@ SUBNUM="sub-${1}"
 TEMP_PATH="/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/temp_files/friends_${SUBNUM}_*_llFile.h5"
 rsync -tv --info=progress2 $TEMP_PATH $SLURM_TMPDIR/
 
-srun python -m train_dev_tests experiment=VLB_vllama2_friends subject=$SUBNUM
+#srun python -m train_dev_tests experiment=VLB_vllama2_friends subject=$SUBNUM
+
+torchrun --nproc_per_node=4 train_dev_tests.py experiment=VLB_vllama2_friends subject=$SUBNUM
