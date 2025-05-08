@@ -44,9 +44,11 @@ def train(config: DictConfig) -> None:
     # set huggingface home env variable so that model weights are cached and fetched from repo
     #os.environ['HF_HOME'] = '/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/models/'
     #os.environ["TRANSFORMERS_CACHE"] = "/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/models"
-    os.environ["TRANSFORMERS_OFFLINE"] = "1"
-    os.environ['HF_HOME'] = config.cache_dir
-    os.environ["TRANSFORMERS_CACHE"] = config.cache_dir
+
+    """ do this in bash script instead"""
+    #os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    #os.environ['HF_HOME'] = config.cache_dir
+    #os.environ["TRANSFORMERS_CACHE"] = config.cache_dir
 
     import pytorch_lightning as pl
     from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
