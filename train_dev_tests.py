@@ -8,7 +8,8 @@ https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50
 """
 
 import logging
-import multiprocessing as mp
+
+#import multiprocessing as mp
 import os
 
 #import subprocess
@@ -185,7 +186,7 @@ if __name__ == "__main__":
     Implementing spawn method instead of default fork method
     https://github.com/pytorch/pytorch/issues/40403
     """
-    mp.set_start_method('spawn', force=True)
+    #mp.set_start_method('spawn', force=True)
 
     # Train (fine-tune).
     out = train()

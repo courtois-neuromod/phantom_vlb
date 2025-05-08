@@ -4,8 +4,11 @@
 #SBATCH --output=/project/rrg-pbellec/mstlaure/phantom_vlb/slurm_files/slurm-%A_%a.out
 #SBATCH --error=/project/rrg-pbellec/mstlaure/phantom_vlb/slurm_files/slurm-%A_%a.err
 #SBATCH --time=12:00:00
-#SBATCH --cpus-per-task=32
+#SBATCH --nodes=1
+#SBATCH --ntasks=1  # ntasks = 4 with srun launch command, 1 with torchrun launch command! (torchrun handles assignment of tasks to GPUs)
+#SBATCH --cpus-per-task=32  # use 32 for torchrun, 32 / num GPUs = 8 with srun
 #SBATCH --gpus-per-node=v100:4
+#SBATCH --gpus-per-task=1
 #SBATCH --mem-per-cpu=4000M
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=marie.stl@gmail.com
@@ -31,4 +34,4 @@ rsync -tv --info=progress2 $TEMP_PATH $SLURM_TMPDIR/
 
 #srun python -m train_dev_tests experiment=VLB_vllama2_friends subject=$SUBNUM
 
-torchrun --nproc_per_node=4 train_dev_tests.py experiment=VLB_vllama2_friends subject=$SUBNUM
+torchrun --nproc_per_node=4 train_dev_tests.py experiment=VLB_vllama2_friends subject=$SUBNUM   # nproc_per_node must match number GPUs
