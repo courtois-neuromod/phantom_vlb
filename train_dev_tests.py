@@ -8,8 +8,7 @@ https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50
 """
 
 import logging
-
-#import multiprocessing as mp
+import multiprocessing as mp
 import os
 
 #import subprocess
@@ -50,7 +49,7 @@ def train(config: DictConfig) -> None:
     #os.environ['HF_HOME'] = config.cache_dir
     #os.environ["TRANSFORMERS_CACHE"] = config.cache_dir
 
-    import pytorch_lightning as pl
+    import lightning as L
     from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
     from lightning.pytorch.strategies import FSDPStrategy
 
@@ -86,7 +85,7 @@ def train(config: DictConfig) -> None:
     #config.datamodule.config.timeseries_path = f"{os.environ["SLURM_TMPDIR"]}/{os.path.basename(config.datamodule.config.timeseries_path)}"
     #print(features_path, timeseries_path)
 
-    pl.seed_everything(config.random_state)
+    L.seed_everything(config.random_state)
 
     # try comet logger: https://www.comet.com/site/
     #
@@ -143,8 +142,8 @@ def train(config: DictConfig) -> None:
         strategy=FSDPStrategy(
             #wrapping_policy=["Linear", "Conv2d"]
             #auto_wrap_policy=auto_wrap_policy,
-            #auto_wrap_policy={MistralDecoderLayer, Conv3d, Linear},
-            auto_wrap_policy=size_based_auto_wrap_policy,
+            auto_wrap_policy={MistralDecoderLayer, Conv3d, Linear, HRFConvolveLayer, RidgeRegressionLayer},
+            #auto_wrap_policy=size_based_auto_wrap_policy,
             activation_checkpointing_policy={
                 MistralDecoderLayer, Conv3d, Linear, HRFConvolveLayer, RidgeRegressionLayer,
             },
@@ -188,7 +187,7 @@ if __name__ == "__main__":
     Implementing spawn method instead of default fork method
     https://github.com/pytorch/pytorch/issues/40403
     """
-    #mp.set_start_method('spawn', force=True)
+    mp.set_start_method('spawn', force=True)
 
     # Train (fine-tune).
     out = train()
