@@ -252,12 +252,16 @@ class VLBLitModule(LightningModule):
         # From VLLaMA2 code: prepare input ids for multimodal
         # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/c0bb03abf6b8a6b9a8dccac006fb4db5d4d9e414/videollama2/model/videollama2_arch.py#L161
         #x_video = [(batch["vision"][i].to(self.config.dtype).to(self.config.device), "video") for i in range(batch["vision"].shape[0])]
-        x_video = [(batch["vision"][i].to(self.config.dtype).to(self.device), "video") for i in range(batch["vision"].shape[0])]
+        #x_video = [(batch["vision"][i].to(self.config.dtype).to(self.device), "video") for i in range(batch["vision"].shape[0])]
+        x_video = [(batch["vision"][i].to(self.config.dtype), "video") for i in range(batch["vision"].shape[0])]
 
         #x_lang = batch["language"].long().to(self.config.device)  # tensor dim = (batch_size, num_feat,) dtype = torch.float32
         #attention_mask = x_lang.ne(0).long().to(self.config.device)
-        x_lang = batch["language"].long().to(self.device)  # tensor dim = (batch_size, num_feat,) dtype = torch.float32
-        attention_mask = x_lang.ne(0).long().to(self.device)
+        #x_lang = batch["language"].long().to(self.device)  # tensor dim = (batch_size, num_feat,) dtype = torch.float32
+        x_lang = batch["language"].long()
+
+        #attention_mask = x_lang.ne(0).long().to(self.device)
+        attention_mask = x_lang.ne(0).long()
 
         weight_mask = make_weight_mask(
             batch["padvals"].numpy(),
@@ -266,7 +270,7 @@ class VLBLitModule(LightningModule):
             x_lang.shape[1],
             self.nnmodule.config.tokenizer_model_max_length,
             self.config.dtype,
-        ).to(self.device)
+        )#.to(self.device)
         #).to(self.config.device)
 
         brain_encoding, l2_reg = self.forward(
@@ -277,7 +281,7 @@ class VLBLitModule(LightningModule):
         )
 
         #y = batch["timeseries"].to(self.config.dtype).to(self.config.device)  # dim = (batch_size, 1000,) dtype = torch.float32
-        y = batch["timeseries"].to(self.config.dtype).to(self.device)  # dim = (batch_size, 1000,) dtype = torch.float32
+        y = batch["timeseries"].to(self.config.dtype)#.to(self.device)  # dim = (batch_size, 1000,) dtype = torch.float32
 
         """
         Implement loss function...
@@ -302,13 +306,14 @@ class VLBLitModule(LightningModule):
         """."""
         x_video = [
             #(batch["vision"][i].to(self.config.dtype).to(self.config.device), "video") for i in range(batch["vision"].shape[0])
-            (batch["vision"][i].to(self.config.dtype).to(self.device), "video") for i in range(batch["vision"].shape[0])
+            #(batch["vision"][i].to(self.config.dtype).to(self.device), "video") for i in range(batch["vision"].shape[0])
+            (batch["vision"][i].to(self.config.dtype), "video") for i in range(batch["vision"].shape[0])
         ]
 
         #x_lang = batch["language"].long().to(self.config.device)
         #attention_mask = x_lang.ne(0).long().to(self.config.device)
-        x_lang = batch["language"].long().to(self.device)
-        attention_mask = x_lang.ne(0).long().to(self.device)
+        x_lang = batch["language"].long()#.to(self.device)
+        attention_mask = x_lang.ne(0).long()#.to(self.device)
 
         weight_mask = make_weight_mask(
             batch["padvals"].numpy(),
@@ -317,7 +322,7 @@ class VLBLitModule(LightningModule):
             x_lang.shape[1],
             self.nnmodule.config.tokenizer_model_max_length,
             self.config.dtype,
-        ).to(self.device)
+        )#.to(self.device)
         #).to(self.config.device)
 
         brain_encoding, l2_reg = self.forward(
@@ -328,7 +333,7 @@ class VLBLitModule(LightningModule):
         )
 
         #y = batch["timeseries"].to(self.config.dtype).to(self.config.device)
-        y = batch["timeseries"].to(self.config.dtype).to(self.device)
+        y = batch["timeseries"].to(self.config.dtype)#.to(self.device)
         brain_loss = F.mse_loss(brain_encoding, y) + l2_reg
         self.log("val/brain_loss", brain_loss)
 
