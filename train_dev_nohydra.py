@@ -2,11 +2,11 @@ import argparse
 import logging
 import multiprocessing as mp
 import os
+from functools import partial
 
 #import subprocess
 #from pathlib import Path
 import comet_ml
-from functools import partial
 import lightning as L
 from lightning.pytorch import Trainer
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
@@ -23,7 +23,8 @@ from src.datamodule import (
     VLBDataModule,
     VLBDataModuleConfig,
 )
-from src.litmodule import (
+from src.just_torch.litmodule_copy import (
+    #from src.litmodule import (
     VLBLitModule,
     VLBLitModuleConfig,
 )
@@ -50,15 +51,6 @@ def train(args):
     Returns:
         The validation loss.
     """
-    # set huggingface home env variable so that model weights are cached and fetched from repo
-    #os.environ['HF_HOME'] = '/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/models/'
-    #os.environ["TRANSFORMERS_CACHE"] = "/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/models"
-
-    """ do this in bash script instead"""
-    #os.environ["TRANSFORMERS_OFFLINE"] = "1"
-    #os.environ['HF_HOME'] = config.cache_dir
-    #os.environ["TRANSFORMERS_CACHE"] = config.cache_dir
-    print(args)
     L.seed_everything(args.random_state)
 
     callbacks = [
@@ -70,7 +62,6 @@ def train(args):
         ),
         LearningRateMonitor(logging_interval="epoch"),
     ]
-    print(callbacks)
 
     logger = CometLogger(
         api_key = args.api_key,
@@ -79,10 +70,9 @@ def train(args):
         name = "vllama2_vlb_friends_logs",
         save_dir = args.output_dir,
     )
-    print(logging)
 
     my_auto_wrap_strategy = partial(size_based_auto_wrap_policy, min_num_params=1e4)
-    
+
     trainer = Trainer(
         precision = "16-mixed",
         accelerator = "gpu",
@@ -109,14 +99,6 @@ def train(args):
         logger=logger,
         callbacks=callbacks,
     )
-    
-    print(trainer)
-    #VLBDataModule,
-    #VLBDataModuleConfig,
-    # instantiates datamodule config within datamodule class from config params
-    #datamodule = instantiate(
-    #    config.datamodule,
-    #)
 
     datamodule = VLBDataModule(
         VLBDataModuleConfig(
@@ -133,7 +115,6 @@ def train(args):
             shuffle_val_data = True,
         ),
     )
-    print(datamodule)
 
     litmodule = VLBLitModule(
         VLBLitModuleConfig(
