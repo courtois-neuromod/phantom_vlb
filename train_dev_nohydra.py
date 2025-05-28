@@ -6,6 +6,7 @@ import os
 #import subprocess
 #from pathlib import Path
 import comet_ml
+from functools import partial
 import lightning as L
 from lightning.pytorch import Trainer
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
@@ -57,7 +58,7 @@ def train(args):
     #os.environ["TRANSFORMERS_OFFLINE"] = "1"
     #os.environ['HF_HOME'] = config.cache_dir
     #os.environ["TRANSFORMERS_CACHE"] = config.cache_dir
-
+    print(args)
     L.seed_everything(args.random_state)
 
     callbacks = [
@@ -69,6 +70,7 @@ def train(args):
         ),
         LearningRateMonitor(logging_interval="epoch"),
     ]
+    print(callbacks)
 
     logger = CometLogger(
         api_key = args.api_key,
@@ -77,7 +79,10 @@ def train(args):
         name = "vllama2_vlb_friends_logs",
         save_dir = args.output_dir,
     )
+    print(logging)
 
+    my_auto_wrap_strategy = partial(size_based_auto_wrap_policy, min_num_params=1e4)
+    
     trainer = Trainer(
         precision = "16-mixed",
         accelerator = "gpu",
@@ -91,23 +96,27 @@ def train(args):
         strategy = FSDPStrategy(
             #wrapping_policy=["Linear", "Conv2d"]
             #auto_wrap_policy=auto_wrap_policy,
-            auto_wrap_policy={MistralDecoderLayer, Conv3d, Linear, HRFConvolveLayer, RidgeRegressionLayer},
+            #auto_wrap_policy={MistralDecoderLayer, Conv3d, Linear, HRFConvolveLayer, RidgeRegressionLayer},
+            auto_wrap_policy=my_auto_wrap_strategy,
             #auto_wrap_policy=size_based_auto_wrap_policy,
             activation_checkpointing_policy={
                 MistralDecoderLayer, Conv3d, Linear, HRFConvolveLayer, RidgeRegressionLayer,
             },
+            state_dict_type="sharded",
+            limit_all_gathers=True,
             cpu_offload=True,
         ),
         logger=logger,
         callbacks=callbacks,
     )
-
-    VLBDataModule,
-    VLBDataModuleConfig,
+    
+    print(trainer)
+    #VLBDataModule,
+    #VLBDataModuleConfig,
     # instantiates datamodule config within datamodule class from config params
-    datamodule = instantiate(
-        config.datamodule,
-    )
+    #datamodule = instantiate(
+    #    config.datamodule,
+    #)
 
     datamodule = VLBDataModule(
         VLBDataModuleConfig(
@@ -120,10 +129,11 @@ def train(args):
             subject = "sub-03",
             random_state = args.random_state,
             batch_size = 1,
-            num_worker = 0,
+            num_workers = 0,
             shuffle_val_data = True,
         ),
     )
+    print(datamodule)
 
     litmodule = VLBLitModule(
         VLBLitModuleConfig(
@@ -136,11 +146,12 @@ def train(args):
                 betas = [0.9, 0.999],
                 eps = 1e-08,
                 weight_decay = 1e-2,
-                lr_scheduler_name = CosineAnnealingLR,
+                lr_scheduler_name = "CosineAnnealingLR",
                 last_epoch = -1,
                 t_max = 50000,
         )
     )
+    print(litmodule)
 
     trainer.fit(model=litmodule, datamodule=datamodule)
 
@@ -167,7 +178,7 @@ if __name__ == "__main__":
     Implementing spawn method instead of default fork method
     https://github.com/pytorch/pytorch/issues/40403
     """
-    mp.set_start_method('spawn', force=True)
+    #mp.set_start_method('spawn', force=True)
 
     args = get_arguments()
     out = train(args)
