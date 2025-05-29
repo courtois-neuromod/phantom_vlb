@@ -329,7 +329,8 @@ class VLBLitModule(LightningModule):
         # https://hydra.cc/docs/advanced/instantiate_objects/overview/
         # https://pytorch.org/docs/stable/generated/torch.optim.AdamW
         self.optimizer = AdamW(
-            params=self.parameters(),
+            params = filter(lambda p: p.requires_grad, self.parameters())
+            #params=self.parameters(),
             lr = self.config.lr,
             betas = self.config.betas,
             eps = self.config.eps,
