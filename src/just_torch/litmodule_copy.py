@@ -196,8 +196,8 @@ class VLBLitModule(LightningModule):
 
         # Apply HRF Convolution
         # TODO: figure out squeezing, output dim... (depends batch size)
-        hrf_embeddings = self.layer_norm2(
-            self.dropout(
+        hrf_embeddings = self.dropout(
+            self.layer_norm2(
                 self.hrf_layer(hidden_states, weight_mask,
                 )#.squeeze(1)
         ))
@@ -329,7 +329,7 @@ class VLBLitModule(LightningModule):
         # https://hydra.cc/docs/advanced/instantiate_objects/overview/
         # https://pytorch.org/docs/stable/generated/torch.optim.AdamW
         self.optimizer = AdamW(
-            params = filter(lambda p: p.requires_grad, self.parameters())
+            params = filter(lambda p: p.requires_grad, self.parameters()),
             #params=self.parameters(),
             lr = self.config.lr,
             betas = self.config.betas,
