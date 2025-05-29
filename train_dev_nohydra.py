@@ -116,7 +116,7 @@ if __name__ == "__main__":
         VLBLitModuleConfig(
             model_path = "DAMO-NLP-SG/VideoLLaMA2-7B",
             freeze_backbone = True,
-            dropout_rate = 0.2,
+            dropout_rate = 0.1,
             num_target = 1000,
             l2_lambda = 0.001,
             lr = 1e-3,
