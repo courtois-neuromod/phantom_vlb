@@ -268,11 +268,11 @@ class VLBLitModule(LightningModule):
         brain_loss = F.mse_loss(brain_encoding, y) + l2_reg
 
         #self.log("train/brain_loss", brain_loss)
-        print(f"brain loss: {brain_loss}")
-        print(torch.cuda.memory_summary(device="cuda:0"))
-        print(torch.cuda.memory_summary(device="cuda:1"))
-        print(torch.cuda.memory_summary(device="cuda:2"))
-        print(torch.cuda.memory_summary(device="cuda:3"))
+        #print(f"brain loss: {brain_loss}")
+        #print(torch.cuda.memory_summary(device="cuda:0"))
+        #print(torch.cuda.memory_summary(device="cuda:1"))
+        #print(torch.cuda.memory_summary(device="cuda:2"))
+        #print(torch.cuda.memory_summary(device="cuda:3"))
 
         return brain_loss
 
