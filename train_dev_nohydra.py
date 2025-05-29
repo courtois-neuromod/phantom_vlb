@@ -1,56 +1,49 @@
-import argparse
-import logging
 import multiprocessing as mp
 import os
-from functools import partial
 
-#import subprocess
-#from pathlib import Path
-import comet_ml
-import lightning as L
-from lightning.pytorch import Trainer
-from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
-from lightning.pytorch.loggers import CometLogger
-from lightning.pytorch.strategies import FSDPStrategy
+if __name__ == "__main__":
 
-#from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
-from torch.distributed.fsdp.wrap import size_based_auto_wrap_policy
-from torch.nn import Conv3d, Linear
-from transformers.models.mistral.modeling_mistral import MistralDecoderLayer
+    """
+    Implementing spawn method instead of default fork method
+    https://github.com/pytorch/pytorch/issues/40403
+    """
+    mp.set_start_method('spawn', force=True)
 
-from src import HRFConvolveLayer, RidgeRegressionLayer
-from src.datamodule import (
-    VLBDataModule,
-    VLBDataModuleConfig,
-)
-from src.just_torch.litmodule_copy import (
-    #from src.litmodule import (
-    VLBLitModule,
-    VLBLitModuleConfig,
-)
+    import argparse
+    from functools import partial
 
+    import comet_ml
+    import lightning as L
+    from lightning.pytorch import Trainer
+    from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
+    from lightning.pytorch.loggers import CometLogger
+    from lightning.pytorch.strategies import FSDPStrategy
+    from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 
-def get_arguments():
-    """."""
+    #from torch.distributed.fsdp.wrap import size_based_auto_wrap_policy
+    #from torch.nn import Conv3d, Linear
+    from transformers.models.mistral.modeling_mistral import MistralDecoderLayer
+
+    from src import HRFConvolveLayer, RidgeRegressionLayer
+    from src.datamodule import (
+        VLBDataModule,
+        VLBDataModuleConfig,
+    )
+
+    #from src.just_torch.litmodule_copy import (
+    from src.litmodule import (
+        VLBLitModule,
+        VLBLitModuleConfig,
+    )
+
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('--api_key', required=True, type=str)
     parser.add_argument('--workspace', required=True, type=str)
     parser.add_argument('--random_state', default=1234, type=int)
     parser.add_argument('--output_dir', default='./results/videollama2/brain_finetune/friends/lightning_ckpt', type=str)
     parser.add_argument('--cache_dir', default='./models', type=str)
+    args = parser.parse_args()
 
-    return parser.parse_args()
-
-
-def train(args):
-    """.
-
-    Args:
-        config (DictConfig): .
-
-    Returns:
-        The validation loss.
-    """
     L.seed_everything(args.random_state)
 
     callbacks = [
@@ -71,7 +64,7 @@ def train(args):
         save_dir = args.output_dir,
     )
 
-    my_auto_wrap_strategy = partial(size_based_auto_wrap_policy, min_num_params=1e4)
+    #my_auto_wrap_strategy = partial(size_based_auto_wrap_policy, min_num_params=1e4)
 
     trainer = Trainer(
         precision = "16-mixed",
@@ -86,11 +79,13 @@ def train(args):
         strategy = FSDPStrategy(
             #wrapping_policy=["Linear", "Conv2d"]
             #auto_wrap_policy=auto_wrap_policy,
+            auto_wrap_policy=partial(transformer_auto_wrap_policy, transformer_layer_cls={MistralDecoderLayer}),
             #auto_wrap_policy={MistralDecoderLayer, Conv3d, Linear, HRFConvolveLayer, RidgeRegressionLayer},
-            auto_wrap_policy=my_auto_wrap_strategy,
+            #auto_wrap_policy=my_auto_wrap_strategy,
             #auto_wrap_policy=size_based_auto_wrap_policy,
             activation_checkpointing_policy={
-                MistralDecoderLayer, Conv3d, Linear, HRFConvolveLayer, RidgeRegressionLayer,
+                #MistralDecoderLayer, Conv3d, Linear, HRFConvolveLayer, RidgeRegressionLayer,
+                MistralDecoderLayer,
             },
             state_dict_type="sharded",
             limit_all_gathers=True,
@@ -120,48 +115,17 @@ def train(args):
         VLBLitModuleConfig(
             model_path = "DAMO-NLP-SG/VideoLLaMA2-7B",
             freeze_backbone = True,
-                dropout_rate = 0.2,
-                num_target = 1000,
-                l2_lambda = 0.001,
-                lr = 1e-3,
-                betas = [0.9, 0.999],
-                eps = 1e-08,
-                weight_decay = 1e-2,
-                lr_scheduler_name = "CosineAnnealingLR",
-                last_epoch = -1,
-                t_max = 50000,
+            dropout_rate = 0.2,
+            num_target = 1000,
+            l2_lambda = 0.001,
+            lr = 1e-3,
+            betas = [0.9, 0.999],
+            eps = 1e-08,
+            weight_decay = 1e-2,
+            lr_scheduler_name = "CosineAnnealingLR",
+            last_epoch = -1,
+            t_max = 50000,
         )
     )
-    print(litmodule)
 
     trainer.fit(model=litmodule, datamodule=datamodule)
-
-    #logging.info(
-    #    f"Best model saved at {callbacks[0].best_model_path}, \
-    #       with a val loss of {callbacks[0].best_model_score}"
-    #)
-    #trainer.save_checkpoint(config.output_dir)
-
-    # TODO: implement LoRA
-    # TODO: Comet: how to log, save, view results (offline mode)
-    # https://www.comet.com/mariestlaurent/quick-start?fromGetStarted=true
-    # https://lightning.ai/docs/pytorch/stable/extensions/generated/lightning.pytorch.loggers.CometLogger.html
-
-    return trainer.validate(
-        model=litmodule,
-        datamodule=datamodule,
-    )[0]["val/brain_loss"]
-
-
-if __name__ == "__main__":
-
-    """
-    Implementing spawn method instead of default fork method
-    https://github.com/pytorch/pytorch/issues/40403
-    """
-    #mp.set_start_method('spawn', force=True)
-
-    args = get_arguments()
-    out = train(args)
-
-    print(out)

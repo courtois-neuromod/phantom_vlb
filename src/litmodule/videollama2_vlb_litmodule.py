@@ -1,5 +1,6 @@
 #import argparse
 #import math
+import os
 import sys
 from dataclasses import dataclass
 
@@ -352,6 +353,10 @@ class VLBLitModule(LightningModule):
             ``LRScheduler`` instance attributes (each nested in a
             list).
         """
+        print(f"Rank: {os.getenv('RANK', 'N/A')}, Local Rank: {os.getenv('LOCAL_RANK', 'N/A')}")
+        print(f"World Size: {os.getenv('WORLD_SIZE', 'N/A')}")
+        print(f"Master Address: {os.getenv('MASTER_ADDR', 'N/A')}, Master Port: {os.getenv('MASTER_PORT', 'N/A')}")
+
         # https://hydra.cc/docs/advanced/instantiate_objects/overview/
         # https://pytorch.org/docs/stable/generated/torch.optim.AdamW
         self.optimizer = AdamW(
