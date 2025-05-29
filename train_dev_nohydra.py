@@ -8,6 +8,7 @@ if __name__ == "__main__":
     https://github.com/pytorch/pytorch/issues/40403
     """
     mp.set_start_method('spawn', force=True)
+    print(f"Multiprocessing start method set to: {mp.get_start_method()}")
 
     import argparse
     from functools import partial

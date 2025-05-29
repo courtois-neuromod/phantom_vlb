@@ -177,6 +177,21 @@ class VLBLitModule(LightningModule):
         Source
         https://lightning.ai/docs/pytorch/stable/advanced/model_init.html#model-parallel-training-fsdp-and-deepspeed
         """
+        # Debugging distributed environment
+        print(f"[{os.getpid()}] Rank: {os.getenv('RANK', 'N/A')}")
+        print(f"[{os.getpid()}] Local Rank: {os.getenv('LOCAL_RANK', 'N/A')}")
+        print(f"[{os.getpid()}] World Size: {os.getenv('WORLD_SIZE', 'N/A')}")
+        print(f"[{os.getpid()}] Master Addr: {os.getenv('MASTER_ADDR', 'N/A')}")
+        print(f"[{os.getpid()}] Master Port: {os.getenv('MASTER_PORT', 'N/A')}")
+        print(f"[{os.getpid()}] CUDA_VISIBLE_DEVICES: {os.getenv('CUDA_VISIBLE_DEVICES', 'N/A')}")
+
+        # Check if distributed is initialized (will be False if not)
+        print(f"[{os.getpid()}] torch.distributed.is_initialized(): {dist.is_initialized()}")
+        if dist.is_initialized():
+            print(f"[{os.getpid()}] dist.get_rank(): {dist.get_rank()}")
+            print(f"[{os.getpid()}] dist.get_world_size(): {dist.get_world_size()}")
+            print(f"[{os.getpid()}] Current device: {torch.cuda.current_device()}")
+
         self.nnmodule = load_pretrained_vllama2(self.config)
         kwargs = {
             #"device": self.config.device,
@@ -353,9 +368,9 @@ class VLBLitModule(LightningModule):
             ``LRScheduler`` instance attributes (each nested in a
             list).
         """
-        print(f"Rank: {os.getenv('RANK', 'N/A')}, Local Rank: {os.getenv('LOCAL_RANK', 'N/A')}")
-        print(f"World Size: {os.getenv('WORLD_SIZE', 'N/A')}")
-        print(f"Master Address: {os.getenv('MASTER_ADDR', 'N/A')}, Master Port: {os.getenv('MASTER_PORT', 'N/A')}")
+        #print(f"Rank: {os.getenv('RANK', 'N/A')}, Local Rank: {os.getenv('LOCAL_RANK', 'N/A')}")
+        #print(f"World Size: {os.getenv('WORLD_SIZE', 'N/A')}")
+        #print(f"Master Address: {os.getenv('MASTER_ADDR', 'N/A')}, Master Port: {os.getenv('MASTER_PORT', 'N/A')}")
 
         # https://hydra.cc/docs/advanced/instantiate_objects/overview/
         # https://pytorch.org/docs/stable/generated/torch.optim.AdamW
