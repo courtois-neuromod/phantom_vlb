@@ -45,6 +45,7 @@ def load_pretrained_vllama2(
         config.model_path,
         config=model_config,
         torch_dtype=config.dtype,  # torch.bfloat16, torch.float16
+        device=config.device,
         device_map=config.device_map,  # "auto",
         low_cpu_mem_usage=True,
         local_files_only=True,
@@ -113,12 +114,13 @@ class VLBLitModuleConfig:
     weight_decay: float
     lr_scheduler_name: str
     last_epoch: int
+    device: torch.device
     t_max: int
 
     def __post_init__(self):
         self.dtype = torch.float16  # torch.bfloat16 for newer GPUs
         #self.device = "cpu"
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        #self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.device_map="auto"
 
 
@@ -153,7 +155,7 @@ class VLBLitModule(LightningModule):
         self.nnmodule = load_pretrained_vllama2(self.config)
         kwargs = {
             "device": self.config.device,
-            "dtype": self.config.dtype,
+            #"dtype": self.config.dtype,
         }
 
         # https://github.com/courtois-neuromod/phantom_LLM/blob/7258a5e95fe256d9ae4669dc5a1ca1be34a0d867/phantom_LLM/src/models/ridge_align.py#L76
@@ -162,10 +164,11 @@ class VLBLitModule(LightningModule):
             self.nnmodule.config.hidden_size,
             self.config.num_target,  # brain target voxel count or parcel count
             self.config.l2_lambda,
+            dtype=torch.float16,
             **kwargs,
         )
-        self.layer_norm1 = torch.nn.LayerNorm(self.nnmodule.config.hidden_size, **kwargs)  # embedding dim == 4096 for vllama2
-        self.layer_norm2 = torch.nn.LayerNorm(self.nnmodule.config.hidden_size, **kwargs)  # embedding dim == 4096 for vllama2
+        #self.layer_norm1 = torch.nn.LayerNorm(self.nnmodule.config.hidden_size, dtype=torch.float32, eps=1e-4, **kwargs)  # embedding dim == 4096 for vllama2
+        self.layer_norm2 = torch.nn.LayerNorm(self.nnmodule.config.hidden_size, dtype=torch.float32, eps=1e-4, **kwargs)  # embedding dim == 4096 for vllama2
         self.dropout = torch.nn.Dropout(self.config.dropout_rate)
 
 
@@ -189,7 +192,8 @@ class VLBLitModule(LightningModule):
         where 4096 is hidden dim size, and 1183 is the sequence lenght for 12 frames of 336x336 video input  (169*7 = 1183...)
         """
         # outputs (from last hidden layer)
-        hidden_states = self.layer_norm1(outputs.hidden_states[-1])
+        #hidden_states = self.layer_norm1(outputs.hidden_states[-1].to(torch.float32))
+        hidden_states = outputs.hidden_states[-1]
 
         # video_gpt: pca, ridge on brain encooding (but not w gradient descent)
         # https://github.com/courtois-neuromod/video_transformer/blob/0906e9a71a2fdb511190f7a757c8aadcb1f6c990/scripts/apply_gpt_ridge_encoding.py#L96
@@ -199,8 +203,8 @@ class VLBLitModule(LightningModule):
         hrf_embeddings = self.dropout(
             self.layer_norm2(
                 self.hrf_layer(hidden_states, weight_mask,
-                )#.squeeze(1)
-        ))
+                ).to(torch.float32)#.squeeze(1)
+        ).to(torch.float16))
 
         # Remove the singleton dimension (NEEDED?)
         #hrf_embeddings = hrf_embeddings.squeeze(-1)
@@ -235,8 +239,8 @@ class VLBLitModule(LightningModule):
 
         weight_mask = make_weight_mask(
             batch["padvals"].numpy(),
-            batch["vis_weights"],
-            batch["lang_weights"],
+            batch["vis_weights"]*3,
+            batch["lang_weights"]*3,
             x_lang.shape[1],
             self.nnmodule.config.tokenizer_model_max_length,
             self.config.dtype,

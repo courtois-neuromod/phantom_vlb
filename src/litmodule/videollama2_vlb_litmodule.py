@@ -62,7 +62,7 @@ def load_pretrained_vllama2(
         config=model_config,
         torch_dtype=config.dtype,  # torch.bfloat16, torch.float16
         device_map=config.device_map,  # "auto",
-        device="cpu",
+        device=config.device,
         low_cpu_mem_usage=True,
         local_files_only=True,
     )
@@ -239,8 +239,8 @@ class VLBLitModule(LightningModule):
 
         # Apply HRF Convolution
         # TODO: figure out squeezing, output dim... (depends batch size)
-        hrf_embeddings = self.layer_norm2(
-            self.dropout(
+        hrf_embeddings = self.dropout(
+            self.layer_norm2(
                 self.hrf_layer(hidden_states, weight_mask,
                 )#.squeeze(1)
         ))
