@@ -118,7 +118,7 @@ class VLBLitModuleConfig:
     t_max: int
 
     def __post_init__(self):
-        self.dtype = torch.float16  # torch.bfloat16 for newer GPUs
+        self.dtype = torch.bfloat16  # torch.bfloat16 for newer GPUs
         #self.device = "cpu"
         #self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.device_map="auto"
@@ -164,7 +164,7 @@ class VLBLitModule(LightningModule):
             self.nnmodule.config.hidden_size,
             self.config.num_target,  # brain target voxel count or parcel count
             self.config.l2_lambda,
-            dtype=torch.float16,
+            dtype=torch.bfloat16, # torch.float16
             **kwargs,
         )
         #self.layer_norm1 = torch.nn.LayerNorm(self.nnmodule.config.hidden_size, dtype=torch.float32, eps=1e-4, **kwargs)  # embedding dim == 4096 for vllama2
@@ -204,7 +204,9 @@ class VLBLitModule(LightningModule):
             self.layer_norm2(
                 self.hrf_layer(hidden_states, weight_mask,
                 ).to(torch.float32)#.squeeze(1)
-        ).to(torch.float16))
+        ).to(torch.bfloat16))
+        #).to(torch.float16))
+
 
         # Remove the singleton dimension (NEEDED?)
         #hrf_embeddings = hrf_embeddings.squeeze(-1)
