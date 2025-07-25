@@ -284,7 +284,7 @@ class VLBLitModule(LightningModule):
         #attention_mask = x_lang.ne(0).long().to(self.device)
         attention_mask = x_lang.ne(0).long()
 
-        weight_mask = make_weight_mask(
+        weight_mask = self.make_weight_mask(
             batch["padvals"],
             batch["vis_weights"],
             batch["lang_weights"],
@@ -335,7 +335,7 @@ class VLBLitModule(LightningModule):
         x_lang = batch["language"].long()#.to(self.device)
         attention_mask = x_lang.ne(0).long()#.to(self.device)
 
-        weight_mask = make_weight_mask(
+        weight_mask = self.make_weight_mask(
             batch["padvals"],
             batch["vis_weights"],
             batch["lang_weights"],
