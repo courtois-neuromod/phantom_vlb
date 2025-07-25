@@ -62,7 +62,7 @@ def load_pretrained_vllama2(
         config=model_config,
         torch_dtype=config.dtype,  # torch.bfloat16, torch.float16
         device_map=config.device_map,  # "auto",
-        device=config.device,
+        #device=config.device,
         low_cpu_mem_usage=True,
         local_files_only=True,
     )

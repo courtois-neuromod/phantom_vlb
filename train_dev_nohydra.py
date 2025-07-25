@@ -60,9 +60,9 @@ if __name__ == "__main__":
     logger = CometLogger(
         api_key = args.api_key,
         workspace = args.workspace,
-        project_name = "phantom_mm",
+        project = "phantom_mm",
         name = "vllama2_vlb_friends_logs",
-        save_dir = args.output_dir,
+        offline_directory = args.output_dir,
     )
 
     #my_auto_wrap_strategy = partial(size_based_auto_wrap_policy, min_num_params=1e4)
