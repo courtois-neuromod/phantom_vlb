@@ -62,7 +62,7 @@ if __name__ == "__main__":
         workspace = args.workspace,
         project = "phantom_mm",
         name = "vllama2_vlb_friends_logs",
-        offline_directory = args.output_dir,
+        #offline_directory = args.output_dir,
     )
 
     #my_auto_wrap_strategy = partial(size_based_auto_wrap_policy, min_num_params=1e4)

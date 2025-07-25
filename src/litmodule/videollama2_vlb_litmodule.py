@@ -94,6 +94,8 @@ def make_weight_mask(pad_vals, vis_weights, lang_weights, lang_len, max_len, dty
 
     feature_len = (vis_weights.shape[1]*13*13) + lang_len - 1
     assert feature_len == max_len # padded so text + vis == 2048
+    
+    device = pad_vals.device
 
     weight_batch = []
     for i in range(pad_vals.shape[0]):
@@ -102,9 +104,9 @@ def make_weight_mask(pad_vals, vis_weights, lang_weights, lang_len, max_len, dty
 
         trial_weights = torch.cat([
             vis_weights[i].repeat_interleave(13*13).to(dtype),
-            torch.zeros(2 + inst_len).to(dtype),
+            torch.zeros(2 + inst_len).to(dtype).to(device),
             lang_weights[i][:dialog_len].to(dtype),
-            torch.zeros(4 + pad_len).to(dtype),
+            torch.zeros(4 + pad_len).to(dtype).to(device),
         ], dim=0)
 
         pad_left = feature_len - trial_weights.shape[0]
@@ -144,7 +146,7 @@ class VLBLitModuleConfig:
     t_max: int
 
     def __post_init__(self):
-        self.dtype = torch.float16  # torch.bfloat16 for newer GPUs
+        self.dtype = torch.bfloat16  # torch.bfloat16 for newer GPUs
         #self.device = "cpu"
         #self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.device_map="auto"
@@ -281,7 +283,7 @@ class VLBLitModule(LightningModule):
         attention_mask = x_lang.ne(0).long()
 
         weight_mask = make_weight_mask(
-            batch["padvals"].cpu().numpy(),
+            batch["padvals"],
             batch["vis_weights"],
             batch["lang_weights"],
             x_lang.shape[1],
@@ -333,7 +335,7 @@ class VLBLitModule(LightningModule):
         attention_mask = x_lang.ne(0).long()#.to(self.device)
 
         weight_mask = make_weight_mask(
-            batch["padvals"].cpu().numpy(),
+            batch["padvals"],
             batch["vis_weights"],
             batch["lang_weights"],
             x_lang.shape[1],
