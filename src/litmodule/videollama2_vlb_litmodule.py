@@ -141,35 +141,35 @@ class VLBLitModule(LightningModule):
         self.config: VLBLitModuleConfig = config
 
 
-def make_weight_mask(self, pad_vals, vis_weights, lang_weights, lang_len, max_len):
+    def make_weight_mask(self, pad_vals, vis_weights, lang_weights, lang_len, max_len):
 
-    feature_len = (vis_weights.shape[1]*13*13) + lang_len - 1
-    assert feature_len == max_len # padded so text + vis == 2048
-    
-    weight_batch = []
-    for i in range(pad_vals.shape[0]):
+        feature_len = (vis_weights.shape[1]*13*13) + lang_len - 1
+        assert feature_len == max_len # padded so text + vis == 2048
+        
+        weight_batch = []
+        for i in range(pad_vals.shape[0]):
 
-        pad_len, inst_len, dialog_len = pad_vals[i]
-        #pad_len = pad_vals[i][0].item()
-        #inst_len = pad_vals[i][1].item()
-        #dialog_len = pad_vals[i][2].item()
+            pad_len, inst_len, dialog_len = pad_vals[i]
+            #pad_len = pad_vals[i][0].item()
+            #inst_len = pad_vals[i][1].item()
+            #dialog_len = pad_vals[i][2].item()
 
-        trial_weights = torch.cat([
-            vis_weights[i].repeat_interleave(13*13).to(self.config.dtype),
-            torch.zeros(2 + inst_len, device=self.device).to(self.config.dtype),
-            lang_weights[i][:dialog_len].to(self.config.dtype),
-            torch.zeros(4 + pad_len, device=self.device).to(self.config.dtype),
-        ], dim=0)
+            trial_weights = torch.cat([
+                vis_weights[i].repeat_interleave(13*13).to(self.config.dtype),
+                torch.zeros(2 + inst_len, device=self.device).to(self.config.dtype),
+                lang_weights[i][:dialog_len].to(self.config.dtype),
+                torch.zeros(4 + pad_len, device=self.device).to(self.config.dtype),
+            ], dim=0)
 
-        pad_left = feature_len - trial_weights.shape[0]
-        weight_batch.append(
-            torch.cat([
-                torch.zeros(pad_left, device=self.device).to(self.config.dtype),
-                trial_weights,
-            ], dim=0).unsqueeze(dim=0)
-        )
+            pad_left = feature_len - trial_weights.shape[0]
+            weight_batch.append(
+                torch.cat([
+                    torch.zeros(pad_left, device=self.device).to(self.config.dtype),
+                    trial_weights,
+                ], dim=0).unsqueeze(dim=0)
+            )
 
-    return torch.cat(weight_batch, dim=0)
+        return torch.cat(weight_batch, dim=0)
 
 
     def configure_model(
