@@ -1,0 +1,63 @@
+# @package _global_
+
+datamodule:
+  _target_:
+    src.datamodule.VLBDataModule
+  config:
+    _target_:
+      src.datamodule.VLBDataModuleConfig
+    features_path: $SCRATCH_PATH/friends_*_features.h5
+    timeseries_path:
+      "$SCRATCH_PATH/${subject}_task-friends_space-\
+      MNI152NLin2009cAsym_atlas-Schaefer18_desc-1000Parcels7Networks_timeseries.h5"
+    lazyload_path: $SCRATCH_PATH/friends_${subject}_*_llFile.h5
+    delay: 3
+    window: 3
+    seasons: [s01, s02, s04, s05, s06]
+    subject: ${subject}
+    random_state: ${random_state}
+    batch_size: 5
+    num_workers: 39
+    shuffle_val_data: False
+
+litmodule:
+  _target_:
+    src.litmodule.VLBLitModule
+  config:
+    _target_:
+      src.litmodule.VLBLitModuleConfig
+    model_path: DAMO-NLP-SG/VideoLLaMA2-7B
+    freeze_backbone: True
+    dropout_rate: 0.1
+    num_target: 1000
+    l2_lambda: 0.001
+    lr: 1e-3
+    betas: [0.9, 0.999]
+    eps: 1e-08
+    weight_decay: 1e-2
+    lr_scheduler_name: CosineAnnealingLR
+    last_epoch: -1
+    t_max: 50000
+
+trainer:
+  _target_: lightning.pytorch.Trainer
+  precision: "bf16-mixed"
+  accelerator: "gpu"
+  gradient_clip_val: 1
+  devices: 1
+  num_nodes: 1
+  max_epochs: 10
+  max_steps: Null
+  val_check_interval: 0.5
+  log_every_n_steps: 15
+
+exp_logger:
+  _target_: lightning.pytorch.loggers.CometLogger
+  api_key: ${my_api_key}
+  workspace: ${my_workspace}
+  project: phantom_mm
+  name: vllama2_vlb_friends_logs
+
+output_dir: ./results/videollama2/brain_finetune/friends/lightning_ckpt
+
+name: vllama2_vlb_friends
