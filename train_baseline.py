@@ -67,7 +67,7 @@ def train(config: DictConfig) -> None:
     #    f"Best model saved at {callbacks[0].best_model_path}, \
     #       with a val loss of {callbacks[0].best_model_score}"
     #)
-    trainer.save_checkpoint(config.output_dir)
+    #trainer.save_checkpoint(config.output_dir)
 
     # TODO: implement LoRA
     # https://github.com/courtois-neuromod/phantom_LLM/blob/dev_beluga/phantom_LLM/src/utils.py

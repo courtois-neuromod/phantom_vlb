@@ -111,7 +111,8 @@ class VLB_Dataset(Dataset):
         # - remove excedent TRs of video frames input features at the tail END
         # - truncate or pad tail end of language features to match length of timeseries
         # - concatenate across all runs... sample from it w getitem function
-        self.ll_path = self.config.lazyload_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"]).replace('*', f"{self.set_name}")
+        #self.ll_path = self.config.lazyload_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"]).replace('*', f"{self.set_name}")
+        self.ll_path = self.config.lazyload_path.replace('$SCRATCH_PATH', os.environ["SCRATCH_PATH"]).replace('*', f"{self.set_name}")
         #f_path = self.config.features_path
 
         if not Path(self.ll_path).exists():
@@ -120,7 +121,8 @@ class VLB_Dataset(Dataset):
             """
             idx = 0
             # load brain timeseries .h5 file
-            b_path = self.config.timeseries_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"])
+            #b_path = self.config.timeseries_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"])
+            b_path = self.config.timeseries_path.replace('$SCRATCH_PATH', os.environ["SCRATCH_PATH"])
             b_file = h5py.File(b_path, "r")
             ep_keys = {
                 run.split("_")[1].split("-")[-1]: (ses, run) for ses, val in b_file.items() for run in val.keys()
@@ -128,7 +130,8 @@ class VLB_Dataset(Dataset):
 
             for s in self.seasons:
 
-                f_path = self.config.features_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"]).replace('*', f"s{s[-1]}")
+                #f_path = self.config.features_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"]).replace('*', f"s{s[-1]}")
+                f_path = self.config.features_path.replace('$SCRATCH_PATH', os.environ["SCRATCH_PATH"]).replace('*', f"s{s[-1]}")
                 f_file = h5py.File(f_path, "r")
                 epi_list = [
                     x for x in f_file.keys()
