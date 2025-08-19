@@ -37,7 +37,7 @@ def train(config: DictConfig) -> None:
             monitor="val/brain_loss",
             filename="last_brainenc",
             mode="min",
-            save_last=True,
+            #save_last=True,
         ),
         LearningRateMonitor(logging_interval="epoch"),
     ]
@@ -70,6 +70,33 @@ def train(config: DictConfig) -> None:
     trainer.save_checkpoint(config.output_dir)
 
     # TODO: implement LoRA
+    # https://github.com/courtois-neuromod/phantom_LLM/blob/dev_beluga/phantom_LLM/src/utils.py
+    # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/main/scripts/custom/finetune_lora.sh
+    # --lora_enable True --lora_r 128 --lora_alpha 256
+    # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/main/videollama2/train.py
+    # https://gemini.google.com/app/41844d6e03d7786e
+    """
+     # Lora or Quant Arguments
+    double_quant: bool = field(
+        default=True,
+        metadata={"help": "Compress the quantization statistics through double quantization."}
+    )
+    quant_type: str = field(
+        default="nf4",
+        metadata={"help": "Quantization data type to use. Should be one of `fp4` or `nf4`."}
+    )
+    bits: int = field(
+        default=16,
+        metadata={"help": "How many bits to use."}
+    )
+    lora_enable: bool = False
+    lora_r: int = 64
+    lora_alpha: int = 16
+    lora_dropout: float = 0.05
+    lora_weight_path: str = ""
+    lora_bias: str = "none"   
+    """
+
 
 if __name__ == "__main__":
 
