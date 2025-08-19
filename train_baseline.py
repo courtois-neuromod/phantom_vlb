@@ -37,7 +37,7 @@ def train(config: DictConfig) -> None:
             monitor="val/brain_loss",
             filename="last_brainenc",
             mode="min",
-            #save_last=True,
+            save_last=True,
         ),
         LearningRateMonitor(logging_interval="epoch"),
     ]
