@@ -31,7 +31,7 @@ export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
 SUBNUM="sub-${1}"
 
 # access data from my scratch instead of copying it to the compute node (over an hour with lazy loading)
-SCRATCH_PATH="/home/mstlaure/links/scratch/phantom_lazyload/temp_files"
+export SCRATCH_PATH="/home/mstlaure/links/scratch/phantom_lazyload/temp_files"
 
 # if temp data do not exist, copy features and timeseries to compute node
 #FEATURES_PATH="/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/results/videollama2/lazyloading/friends/friends_*_features.h5"
