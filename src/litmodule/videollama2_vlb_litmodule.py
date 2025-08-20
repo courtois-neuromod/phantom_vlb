@@ -161,6 +161,9 @@ class VLBLitModuleConfig:
     model_path: str
     freeze_backbone: bool
     use_lora: bool
+    lora_r: int
+    lora_alpha: int 
+    lora_dropout: float
     dropout_rate: float
     num_target: int
     l2_lambda: float
