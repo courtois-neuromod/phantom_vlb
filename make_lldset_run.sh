@@ -7,7 +7,6 @@
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node=1
 #SBATCH --cpus-per-task=40
-#SBATCH --gres=gpu:h100:1
 #SBATCH --mem-per-cpu=4000M
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=marie.stl@gmail.com
@@ -19,14 +18,6 @@ module load httpproxy  # comet can be used online from the clusters after loadin
 
 # activate project's virtual env
 source /home/mstlaure/links/projects/rrg-pbellec/mstlaure/phantom_vlb/vllama2_rq_venv/bin/activate
-
-export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
-
-export TRANSFORMERS_OFFLINE="1"
-export HF_HOME="./models"
-export TRANSFORMERS_CACHE="./models"
-
-export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
 
 SUBNUM="sub-${1}"
 
