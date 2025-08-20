@@ -28,6 +28,7 @@ sys.path.append('../../')
 #    MODAL_INDEX_MAP,
 #)
 #from VideoLLaMA2.videollama2.mm_utils import get_model_name_from_path
+from VideoLLaMA2.videollama2.videollama2_trainer import find_all_linear_names
 from VideoLLaMA2.videollama2.model.videollama2_mistral import (
     #Videollama2MistralConfig,
     Videollama2MistralForCausalLM,
@@ -118,16 +119,28 @@ def load_pretrained_vllama2(
 
         from finetune_lora.sh
         --lora_r 128 --lora_alpha 256
+
+        From Gemini flash 2.5
+        r: 
+            This is the most crucial hyperparameter. It determines the rank of the low-rank matrices. A higher rank means more trainable parameters but potentially better performance. A common starting point is r=8 or r=16.
+        lora_alpha: 
+            A scaling factor for the LoRA weights. A higher value gives more weight to the new LoRA matrices. A common practice is to set it to r * 2.
+        target_modules:
+            A list of the layers to which LoRA should be applied. For most models, this includes linear layers like q_proj, k_proj, v_proj, and out_proj in attention blocks.
+        lora_dropout:
+            The dropout rate for the LoRA layers.
+
+        https://huggingface.co/docs/peft/main/en/package_reference/lora#peft.LoraConfig
         """
         lora_config = LoraConfig(
-            task_type=TaskType.SEQ_CLS, # Or your specific task
-            r=16,
-            lora_alpha=32,
-            lora_dropout=0.1,
-            target_modules=["query", "key", "value"], # Adjust based on your model's layer names
+            task_type="FEATURE_EXTRACTION", # https://huggingface.co/docs/peft/en/package_reference/peft_types
+            r=config.lora_r,  # 16
+            lora_alpha=config.lora_alpha  # 32,
+            lora_dropout=config.lora_dropout  # 0.1,
+            target_modules=find_all_linear_names(model),
         )
-        model = get_peft_model(model, config)
-        model.print_trainable_parameters()
+        model = get_peft_model(model, lora_config)
+        #model.print_trainable_parameters()
 
     return model
 

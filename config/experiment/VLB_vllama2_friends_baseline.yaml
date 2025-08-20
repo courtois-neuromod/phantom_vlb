@@ -29,6 +29,9 @@ litmodule:
     model_path: DAMO-NLP-SG/VideoLLaMA2-7B
     freeze_backbone: True
     use_lora: False
+    lora_r: null
+    lora_alpha: null
+    lora_dropout: null    
     dropout_rate: 0.1
     num_target: 1000
     l2_lambda: 0.001

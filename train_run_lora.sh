@@ -30,19 +30,7 @@ export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
 
 SUBNUM="sub-${1}"
 
-# access data from my scratch instead of copying it to the compute node (over an hour with lazy loading)
+# access data from my scratch instead of copying it to the compute node (takes hours even with lazy loading...)
 export SCRATCH_PATH="/home/mstlaure/links/scratch/phantom_lazyload/temp_files"
 
-# if temp data do not exist, copy features and timeseries to compute node
-#FEATURES_PATH="/home/mstlaure/projects/rrg-pbellec/mstlaure/phantom_vlb/results/videollama2/lazyloading/friends/friends_*_features.h5"
-#TIMESERIES_PATH="/home/mstlaure/projects/rrg-pbellec/mstlaure/cneuromod_extract_tseries/outputs/friends/${SUBNUM}/func/${SUBNUM}_task-friends_space-MNI152NLin2009cAsym_atlas-Schaefer18_desc-1000Parcels7Networks_timeseries.h5"
-
-#rsync -tv --info=progress2 $FEATURES_PATH $SLURM_TMPDIR/
-#rsync -tv --info=progress2 $TIMESERIES_PATH $SLURM_TMPDIR/
-
-# if temp data have been produced, copy those instead
-#TEMP_PATH="/home/mstlaure/links/projects/rrg-pbellec/mstlaure/phantom_vlb/temp_files/friends_${SUBNUM}_*_llFile.h5"
-
-#rsync -tv --info=progress2 $TEMP_PATH $SLURM_TMPDIR/
-
-python train_baseline.py experiment=VLB_vllama2_friends_baseline subject=$SUBNUM
+python train.py experiment=VLB_vllama2_friends_lora subject=$SUBNUM
