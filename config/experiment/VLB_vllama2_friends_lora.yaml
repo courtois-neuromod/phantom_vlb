@@ -59,7 +59,7 @@ exp_logger:
   api_key: ${my_api_key}
   workspace: ${my_workspace}
   project: phantom_mm
-  name: vllama2_vlb_friends_lora
+  name: vllama2_vlb_friends_lora_${subject}
 
 output_dir: ./results/videollama2/brain_finetune/friends/lightning_ckpt/baseline
 
