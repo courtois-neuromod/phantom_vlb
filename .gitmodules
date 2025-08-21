@@ -1,0 +1,6 @@
+[submodule "friends_annotations"]
+	path = friends_annotations
+	url = git@github.com:courtois-neuromod/friends_annotations.git
+[submodule "VideoLLaMA2"]
+	path = VideoLLaMA2
+	url = git@github.com:DAMO-NLP-SG/VideoLLaMA2.git

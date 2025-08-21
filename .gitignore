@@ -84,3 +84,14 @@ target/
 
 # Mypy cache
 .mypy_cache/
+
+# project files
+data/*
+models/*
+results/*
+config/logger/*
+comet/*
+outputs/*
+slurm_files/*
+temp_files/*
+
