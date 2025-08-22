@@ -135,8 +135,8 @@ def load_pretrained_vllama2(
         lora_config = LoraConfig(
             task_type="FEATURE_EXTRACTION", # https://huggingface.co/docs/peft/en/package_reference/peft_types
             r=config.lora_r,  # 16
-            lora_alpha=config.lora_alpha  # 32,
-            lora_dropout=config.lora_dropout  # 0.1,
+            lora_alpha=config.lora_alpha,  # 32,
+            lora_dropout=config.lora_dropout,  # 0.1,
             target_modules=find_all_linear_names(model),
         )
         model = get_peft_model(model, lora_config)
