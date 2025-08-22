@@ -16,7 +16,7 @@ datamodule:
     seasons: [s01, s02, s04, s05, s06]
     subject: ${subject}
     random_state: ${random_state}
-    batch_size: 5
+    batch_size: 3
     num_workers: 39
     shuffle_val_data: False
 
