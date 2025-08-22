@@ -28,7 +28,7 @@ sys.path.append('../../')
 #    MODAL_INDEX_MAP,
 #)
 #from VideoLLaMA2.videollama2.mm_utils import get_model_name_from_path
-from VideoLLaMA2.videollama2.videollama2_trainer import find_all_linear_names
+#from VideoLLaMA2.videollama2.videollama2_trainer import find_all_linear_names
 from VideoLLaMA2.videollama2.model.videollama2_mistral import (
     #Videollama2MistralConfig,
     Videollama2MistralForCausalLM,
@@ -37,6 +37,7 @@ from VideoLLaMA2.videollama2.model.videollama2_mistral import (
 from src import (
     HRFConvolveLayer,
     RidgeRegressionLayer,
+    find_all_linear_names,
 )
 
 NUM_FRAMES = 12  # (must match lazyloading... 3TRs and 4 frames per TR); higher than default of 8 in vllama2's CONSTANTS
