@@ -37,10 +37,26 @@ from VideoLLaMA2.videollama2.model.videollama2_mistral import (
 from src import (
     HRFConvolveLayer,
     RidgeRegressionLayer,
-    find_all_linear_names,
 )
 
 NUM_FRAMES = 12  # (must match lazyloading... 3TRs and 4 frames per TR); higher than default of 8 in vllama2's CONSTANTS
+
+
+# adapted from https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/c0bb03abf6b8a6b9a8dccac006fb4db5d4d9e414/videollama2/videollama2_trainer.py#L75C1-L88C35
+def find_all_linear_names(model):
+    cls = torch.nn.Linear
+    lora_module_names = set()
+    multimodal_keywords = ['mm_projector', 'vision_tower', 'vision_resampler']
+    for name, module in model.named_modules():
+        if any(mm_keyword in name for mm_keyword in multimodal_keywords):
+            continue
+        if isinstance(module, cls):
+            names = name.split('.')
+            lora_module_names.add(names[0] if len(names) == 1 else names[-1])
+
+    if 'lm_head' in lora_module_names: # needed for 16-bit
+        lora_module_names.remove('lm_head')
+    return list(lora_module_names)
 
 
 def load_pretrained_vllama2(
@@ -58,7 +74,7 @@ def load_pretrained_vllama2(
     """
     model_config = AutoConfig.from_pretrained(config.model_path)
     #model_config = Videollama2MistralConfig.from_pretrained(config.model_path)
-    model_config._attn_implementation = "flash_attention_2"  # "flash_attention_2", "sdpa", None
+    model_config._attn_implementation = "sdpa"  # "flash_attention_2", "sdpa", None
 
     model =  Videollama2MistralForCausalLM.from_pretrained(
         config.model_path,
