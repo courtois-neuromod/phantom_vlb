@@ -1,36 +1,20 @@
-#import argparse
-#import math
 import os
 import sys
 from dataclasses import dataclass
 
-#import numpy as np
 import torch
 import torch.nn.functional as F
 
-#from hydra.utils import instantiate
 from lightning.pytorch import LightningModule
-from peft import LoraConfig, get_peft_model, TaskType
+from peft import LoraConfig, get_peft_model
 from torch.optim import Adam, AdamW, lr_scheduler
 from transformers import (
     AutoConfig,
-    #    AutoModelForCausalLM,
-    #    AutoTokenizer,
-    #    BitsAndBytesConfig,
-    #    PretrainedConfig,
 )
 
 sys.path.append('../../')
 
-#from VideoLLaMA2.videollama2.constants import (
-#    DEFAULT_IMAGE_TOKEN,
-#    DEFAULT_VIDEO_TOKEN,
-#    MODAL_INDEX_MAP,
-#)
-#from VideoLLaMA2.videollama2.mm_utils import get_model_name_from_path
-#from VideoLLaMA2.videollama2.videollama2_trainer import find_all_linear_names
 from VideoLLaMA2.videollama2.model.videollama2_mistral import (
-    #Videollama2MistralConfig,
     Videollama2MistralForCausalLM,
 )
 
@@ -74,7 +58,7 @@ def load_pretrained_vllama2(
     """
     model_config = AutoConfig.from_pretrained(config.model_path)
     #model_config = Videollama2MistralConfig.from_pretrained(config.model_path)
-    model_config._attn_implementation = "sdpa"  # "flash_attention_2", "sdpa", None
+    model_config._attn_implementation = "flash_attention_2"  # "flash_attention_2", "sdpa", None
 
     model =  Videollama2MistralForCausalLM.from_pretrained(
         config.model_path,
@@ -89,7 +73,8 @@ def load_pretrained_vllama2(
 
     # for pre-training
     if config.freeze_backbone:
-        model.model.requires_grad_(False)
+        model.requires_grad_(False)
+        model.model.requires_grad_(False)  # only freezes the llm but not the mm_projector
 
     # Needed w lightning?
     #if hasattr(model, "enable_input_require_grads"):

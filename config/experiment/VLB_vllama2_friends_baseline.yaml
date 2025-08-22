@@ -51,7 +51,7 @@ trainer:
   devices: 1
   num_nodes: 1
   max_epochs: 10
-  val_check_interval: 0.5
+  val_check_interval: 0.2
   log_every_n_steps: 15
 
 exp_logger:
