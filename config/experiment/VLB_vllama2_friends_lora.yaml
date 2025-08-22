@@ -61,6 +61,6 @@ exp_logger:
   project: phantom_mm
   name: vllama2_vlb_friends_lora_${subject}
 
-output_dir: ./results/videollama2/brain_finetune/friends/lightning_ckpt/baseline
+output_dir: ./results/videollama2/brain_finetune/friends/lightning_ckpt/lora
 
 name: vllama2_vlb_friends
