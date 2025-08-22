@@ -73,8 +73,9 @@ def load_pretrained_vllama2(
 
     # for pre-training
     if config.freeze_backbone:
-        model.requires_grad_(False)
-        model.model.requires_grad_(False)  # only freezes the llm but not the mm_projector
+        model.model.requires_grad_(False)  # only freezes the llm backbone but not the mm_projector
+        for p in model.get_model().mm_projector.parameters():
+            p.requires_grad = False
 
     # Needed w lightning?
     #if hasattr(model, "enable_input_require_grads"):
