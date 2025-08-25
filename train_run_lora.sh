@@ -27,6 +27,7 @@ export HF_HOME="./models"
 export TRANSFORMERS_CACHE="./models"
 
 export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
+export HYDRA_FULL_ERROR=1
 
 SUBNUM="sub-${1}"
 

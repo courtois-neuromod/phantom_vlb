@@ -16,7 +16,7 @@ datamodule:
     seasons: [s01, s02, s04, s05, s06]
     subject: ${subject}
     random_state: ${random_state}
-    batch_size: 5
+    batch_size: 3
     num_workers: 39
     shuffle_val_data: False
 
@@ -51,7 +51,7 @@ trainer:
   devices: 1
   num_nodes: 1
   max_epochs: 10
-  val_check_interval: 0.5
+  val_check_interval: 0.2
   log_every_n_steps: 15
 
 exp_logger:
@@ -61,6 +61,6 @@ exp_logger:
   project: phantom_mm
   name: vllama2_vlb_friends_lora_${subject}
 
-output_dir: ./results/videollama2/brain_finetune/friends/lightning_ckpt/baseline
+output_dir: ./results/videollama2/brain_finetune/friends/lightning_ckpt/lora
 
 name: vllama2_vlb_friends

@@ -1,36 +1,20 @@
-#import argparse
-#import math
 import os
 import sys
 from dataclasses import dataclass
 
-#import numpy as np
 import torch
 import torch.nn.functional as F
 
-#from hydra.utils import instantiate
 from lightning.pytorch import LightningModule
-from peft import LoraConfig, get_peft_model, TaskType
+from peft import LoraConfig, get_peft_model
 from torch.optim import Adam, AdamW, lr_scheduler
 from transformers import (
     AutoConfig,
-    #    AutoModelForCausalLM,
-    #    AutoTokenizer,
-    #    BitsAndBytesConfig,
-    #    PretrainedConfig,
 )
 
 sys.path.append('../../')
 
-#from VideoLLaMA2.videollama2.constants import (
-#    DEFAULT_IMAGE_TOKEN,
-#    DEFAULT_VIDEO_TOKEN,
-#    MODAL_INDEX_MAP,
-#)
-#from VideoLLaMA2.videollama2.mm_utils import get_model_name_from_path
-from VideoLLaMA2.videollama2.videollama2_trainer import find_all_linear_names
 from VideoLLaMA2.videollama2.model.videollama2_mistral import (
-    #Videollama2MistralConfig,
     Videollama2MistralForCausalLM,
 )
 
@@ -40,6 +24,23 @@ from src import (
 )
 
 NUM_FRAMES = 12  # (must match lazyloading... 3TRs and 4 frames per TR); higher than default of 8 in vllama2's CONSTANTS
+
+
+# adapted from https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/c0bb03abf6b8a6b9a8dccac006fb4db5d4d9e414/videollama2/videollama2_trainer.py#L75C1-L88C35
+def find_all_linear_names(model):
+    cls = torch.nn.Linear
+    lora_module_names = set()
+    multimodal_keywords = ['mm_projector', 'vision_tower', 'vision_resampler']
+    for name, module in model.named_modules():
+        if any(mm_keyword in name for mm_keyword in multimodal_keywords):
+            continue
+        if isinstance(module, cls):
+            names = name.split('.')
+            lora_module_names.add(names[0] if len(names) == 1 else names[-1])
+
+    if 'lm_head' in lora_module_names: # needed for 16-bit
+        lora_module_names.remove('lm_head')
+    return list(lora_module_names)
 
 
 def load_pretrained_vllama2(
@@ -72,7 +73,10 @@ def load_pretrained_vllama2(
 
     # for pre-training
     if config.freeze_backbone:
-        model.model.requires_grad_(False)
+        model.requires_grad_(False)
+        model.model.requires_grad_(False)  # only freezes the llm backbone but not the mm_projector
+        for p in model.get_model().mm_projector.parameters():
+            p.requires_grad = False
 
     # Needed w lightning?
     #if hasattr(model, "enable_input_require_grads"):
@@ -135,8 +139,8 @@ def load_pretrained_vllama2(
         lora_config = LoraConfig(
             task_type="FEATURE_EXTRACTION", # https://huggingface.co/docs/peft/en/package_reference/peft_types
             r=config.lora_r,  # 16
-            lora_alpha=config.lora_alpha  # 32,
-            lora_dropout=config.lora_dropout  # 0.1,
+            lora_alpha=config.lora_alpha,  # 32,
+            lora_dropout=config.lora_dropout,  # 0.1,
             target_modules=find_all_linear_names(model),
         )
         model = get_peft_model(model, lora_config)
@@ -161,9 +165,9 @@ class VLBLitModuleConfig:
     model_path: str
     freeze_backbone: bool
     use_lora: bool
-    lora_r: int
-    lora_alpha: int 
-    lora_dropout: float
+    lora_r: int | None
+    lora_alpha: int | None
+    lora_dropout: float | None
     dropout_rate: float
     num_target: int
     l2_lambda: float
