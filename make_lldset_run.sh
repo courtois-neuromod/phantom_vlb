@@ -19,9 +19,11 @@ module load httpproxy  # comet can be used online from the clusters after loadin
 # activate project's virtual env
 source /home/mstlaure/links/projects/rrg-pbellec/mstlaure/phantom_vlb/vllama2_rq_venv/bin/activate
 
+export HYDRA_FULL_ERROR=1
+
 SUBNUM="sub-${1}"
 
 # access data from my scratch instead of copying it to the compute node (takes hours even with lazy loading...)
 export SCRATCH_PATH="/home/mstlaure/links/scratch/phantom_lazyload/temp_files"
 
-python make_lldset.py experiment=VLB_vllama2_friends_baseline subject=$SUBNUM
+python make_lldset.py experiment=VLB_vllama2_friends_mkdset subject=$SUBNUM
