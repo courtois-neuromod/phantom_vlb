@@ -206,6 +206,7 @@ class VLB_Dataset(Dataset):
                             idx += 1
 
                 f_file.close()
+            b_file.close()
 
             with h5py.File(self.ll_path, "a") as f:
                 f.create_dataset("dset_len", data=[idx+1])
