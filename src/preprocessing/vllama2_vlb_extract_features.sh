@@ -22,7 +22,7 @@ OUTP_DIR="../../results/videollama2/lazyloading/friends"
 SEASON="${1}"
 
 # --num_frames 8 \
-python videollama2_vlb_lazyloading_hrf.py \
+python videollama2_vlb_extractfeatures.py \
     --input_transcript_path "${DATA_DIR}/stimuli/transcripts/friends/${SEASON}" \
     --input_seg_path "${SEG_DIR}/${SEASON}" \
     --input_video_path "../../../friends_algonauts/data/friends.stimuli/${SEASON}" \

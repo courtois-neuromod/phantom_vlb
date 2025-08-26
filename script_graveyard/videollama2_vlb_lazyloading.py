@@ -30,7 +30,6 @@ NUM_FRAMES_PER_SECOND = 1
 """
 
 import argparse
-import ast
 import glob
 import math
 import os
@@ -70,6 +69,12 @@ def get_arguments():
     )
     parser.add_argument(
         '--model_max_length', type=int, default=2048,
+    )
+    parser.add_argument(
+        '--window_max_length', type=int, default=1900,
+    )
+    parser.add_argument(
+        '--add_syst_message', type=bool, default=False,
     )
     parser.add_argument(
         '--bf16', type=bool, default=True,
@@ -195,31 +200,7 @@ def prep_tokenizer(ll_args):
     return tokenizer
 
 
-def get_max_token(args):
-    """
-    Cap the number of input text tokens based on the model capacity and visual sequence lenght
-    """
-    num_frames = args.window_duration * args.frames_per_tr  # number video frames per examplar
-
-    # Input frames are downsampled by the vllama2 connector's sampler
-    # the sampler is na n.Conv3d over time (frames), height, width
-    # with pad=1, stride=2
-    # e.g., 12, 24, 24 -> 7, 13, 13
-    num_downsampled_frames = math.floor(num_frames/2) + 1
-    max_text_tokens = args.model_max_length - (num_downsampled_frames*169)  # visual seq len; 13 * 13 = 169
-
-    # -1, because the modality token gets removed by vllama2 during input processing
-    return max_text_tokens + 1
-
-
-def prep_text(
-    scene_text,
-    seg_text,
-    word_lists,
-    onset_lists,
-    tokenizer,
-    max_tokens,
-):
+def prep_text(text, tokenizer, window_max_length, add_syst_message=False, is_scene=False):
     """
     Tokenizes raw input text
     Adapted from
@@ -235,69 +216,45 @@ def prep_text(
     As a reference (for video frame input)
     multimodal_token_index = -201
     """
-    all_words = [w for w_list in word_lists for w in w_list]
-    all_onsets = [o for o_list in onset_lists for o in o_list]
-    assert len(all_words) == len(all_onsets)
 
-    if seg_text == "":
-        seg_dialog = "No dialogue."
-        token_onsets = [0.5, 1.0]  # dummy token times
-    else:
-        token_onsets = []
-        seg_dialog = ""
-        for w, o in zip(all_words, all_onsets):
-            w_t = tokenizer.tokenize(w)
-            token_onsets += [o] * len(w_t)
-            seg_dialog += f"{w} "
-        assert len(token_onsets) == len(tokenizer.tokenize(seg_dialog.strip()))
-        #assert len(token_onsets) == len(tokenizer.tokenize(seg_text.strip()))
-
-    """
-    Truncate scene text to fit within max model window length (in tokens)
-    after accounting for visual features
-
-    73 is the number of tokens for the instructions + syst_message without the added dialogue
-    80 to give a bit of a buffer
-    """
-    tokens = tokenizer.tokenize(scene_text.strip())
-    seg_len = len(tokenizer.tokenize(seg_dialog.strip()))
-    max_scene_length = max_tokens - (80 + seg_len)
-    if len(tokens) > max_scene_length:
-        tokens = tokens[-max_scene_length:]
-    background_text = tokenizer.convert_tokens_to_string(tokens).strip()
-
+    # truncate text input to fix max language window length (in tokens)
+    tokens = tokenizer.tokenize(text.strip())
+    if len(tokens) > window_max_length:
+        tokens = tokens[-window_max_length:]
+    text = tokenizer.convert_tokens_to_string(tokens)
 
     # Text Prep
     # pass text through .strip() to remove extra white spaces,
     # add modal token to begining of input text for each entry
     modal_token = "<video>"
-    inst_text = "Here are the words spoken in the video:"
-    inst_len = len(tokenizer.tokenize(inst_text.strip()))
-    instructions = f"{inst_text.strip()} {seg_dialog.strip()}"
+    message = [{'role': 'user', 'content': modal_token + '\n' + text.strip()}]
 
-    """
-    +2 tokens before (/n -> '▁', '<0x0A>')
-    +4 tokens after ([/INST] -> '▁[', '/', 'INST', ']')
-    """
-    message = [{'role': 'user', 'content': modal_token + '\n' + instructions.strip()}]
-
-    system_message = [
-        {'role': 'system', 'content': (
-        """<<SYS>>\nThis video is from a scene from the TV show Friends. Try to understand what is happening in the video."""
-        """\n"""
-        f"""For context, here is the dialogue that was spoken just before the video onset: {background_text}.\n<</SYS>>""")
-        }
-    ]
-    message = system_message + message
+    # Not certain if this step is helpful or needed...
+    if add_syst_message:
+        if is_scene:
+            system_message = [
+                {'role': 'system', 'content': (
+                """<<SYS>>\nThis short video is from a scene from the TV show Friends. You are given the dialogue between the characters, from the beginning of the scene until the end of the short video."""
+                """\n"""
+                """Try to understand what is happening in this short video, including the characters' actions, intentions, moods and interactions, in the context of the situation unfolding in the scene.\n<</SYS>>""")
+                }
+            ]
+        else:
+            system_message = [
+                {'role': 'system', 'content': (
+                """<<SYS>>\nThis short video is from an episode of the TV show Friends. You are given the dialogue between the characters, from the beginning of the episode up until the end of the short video."""
+                """\n"""
+                """Try to understand what is happening in this short video, including the characters' actions, intentions, moods and interactions, in the context of the story unfolding in the episode.\n<</SYS>>""")
+                }
+            ]
+        message = system_message + message
 
     prompt = tokenizer.apply_chat_template(message, tokenize=False, add_generation_prompt=False)
 
     # returns list, not pytorch tensor (otherwise set return_tensors='pt')
     input_ids = tokenizer_multimodal_token(prompt, tokenizer, modal_token, return_tensors=None)#.unsqueeze(0).long().cuda()
 
-    return (
-        input_ids, token_onsets, inst_len,
-    )
+    return input_ids
 
 
 def load_video(video_path, tr = 1.49):
@@ -378,7 +335,6 @@ def make_lazy_loading_videollama2(ll_args):
 
     ll_args = prep_video_processor(ll_args)
     tokenizer = prep_tokenizer(ll_args)
-    maxnum_tokens = get_max_token(ll_args)
 
     for ep_num, in_paths in tqdm(input_file_paths.items(), desc='Processing season episodes'):
 
@@ -387,93 +343,85 @@ def make_lazy_loading_videollama2(ll_args):
             transcript = pd.read_csv(in_paths['transcript'], sep = '\t')
             seg_times = get_sceneonsets(pd.read_csv(in_paths['seg'], sep = '\t'))
 
-            # run's list of tokens per TR
-            run_tokens = []
-            run_tk_times = []
-            # script text from scene unset until the shown video frames
+            # tokens for transcript from episode onset up until TR
+            epi_tokens = []
+            epi_chunk = ''
+
+            # tokens for transcript from scene onset up until TR
+            scenes_tokens = []
             scene_chunk = ''
             j = 1
-            # script for period matching the shown video frames, split per TR
-            tr_chunk = [""] * ll_args.window_duration
-            tr_words = [[]] * ll_args.window_duration
-            tr_onsets = [[]] * ll_args.window_duration
 
-            # number of padded zeros at the right-side of language tokens
+            # tokens for transcript from last few TRs (number of TRs == ll_args.window_duration)
+            trs_tokens = []
+            tr_chunk = [""] * ll_args.window_duration
+
             mask_params = []
 
             for i in range(transcript.shape[0]):
                 if (i * ll_args.tr) > seg_times[j] and j < (len(seg_times) - 1):
-                    # reset previously-spoken scene text with new scene onset
+                    # reset input text with new scene onset
                     scene_chunk = ''
-                    tr_chunk = [""] * ll_args.window_duration
-                    tr_words = [[]] * ll_args.window_duration
-                    tr_onsets = [[]] * ll_args.window_duration
                     j += 1
 
                 if not pd.isnull(transcript["text_per_tr"][i]):
                     i_text = str(transcript["text_per_tr"][i])
-                    i_words = ast.literal_eval(transcript["words_per_tr"][i])
-                    i_times = ast.literal_eval(transcript["onsets_per_tr"][i])
-                    assert len(i_words) == len(i_times)
+                    epi_chunk += i_text
+                    scene_chunk += i_text
                 else:
                     i_text = ""
-                    i_words = []
-                    i_times = []
-                scene_chunk += tr_chunk[0]
+
                 tr_chunk = tr_chunk[1:] + [i_text]
-                tr_words = tr_words[1:] + [i_words]
-                tr_onsets = tr_onsets[1:] + [i_times]
 
-                """
-                Outputs token ids for instructions, previous scene dialogue
-                and current video dialogue.
-                Also outputs timing (in sec, from episode onset) for each token
-                from the current video dialogue.
+                episode_ids = prep_text(epi_chunk, tokenizer, ll_args.window_max_length, ll_args.add_syst_message)
+                scene_ids = prep_text(scene_chunk, tokenizer, ll_args.window_max_length, ll_args.add_syst_message, is_scene=True)
+                trs_ids = prep_text(''.join(tr_chunk), tokenizer, ll_args.window_max_length)
 
-                Index for -201 id is where systems and users messages are split
-
-                Where 169 (13w x 13h) is the number of embedded tokens per video frame
-                for vllama2 (output from connector sampler, a 3D conv layer over time, h and w)
-                """
-                run_ids, id_onsets, instru_len = prep_text(
-                    scene_chunk, ''.join(tr_chunk), tr_words,
-                    tr_onsets, tokenizer, maxnum_tokens,
+                epi_pad = (ll_args.model_max_length)-len(episode_ids)
+                epi_tokens.append(
+                    np.pad(episode_ids, (0, epi_pad))
                 )
-
-                tr_pad = (maxnum_tokens) - len(run_ids)
-                run_tokens.append(
-                    np.pad(run_ids, (0, tr_pad))
+                scene_pad = (ll_args.model_max_length)-len(scene_ids)
+                scenes_tokens.append(
+                    np.pad(scene_ids, (0, scene_pad))
                 )
-                # max len is 58 tokens; checked for 6 seaons of friends
-                time_pad = 64 - len(id_onsets)
-                run_tk_times.append(
-                    np.pad(id_onsets, (0, time_pad))
+                trs_pad = (ll_args.model_max_length)-len(trs_ids)
+                trs_tokens.append(
+                    np.pad(trs_ids, (0, trs_pad))
                 )
                 mask_params.append(
                     np.array(
-                        [tr_pad, instru_len, len(id_onsets)]
+                        [epi_pad, scene_pad, trs_pad]
                 ))
 
             with h5py.File(ll_path, "a") as f:
                 group = f.create_group(ep_num) if not ep_num in f else f[ep_num]
                 group.create_dataset(
-                    "transcript_features",
-                    data=np.array(run_tokens),
+                    "episode_transcript_features",
+                    data=np.array(epi_tokens),
                     **{
                         "compression": "gzip",
                         "compression_opts": 4,
                     },
                 )
                 group.create_dataset(
-                    "transcript_onsets",
-                    data=np.array(run_tk_times),
+                    "scene_transcript_features",
+                    data=np.array(scenes_tokens),
                     **{
                         "compression": "gzip",
                         "compression_opts": 4,
                     },
                 )
                 group.create_dataset(
-                    "masking_params",
+                    f"trs_transcript_features",
+                    data=np.array(trs_tokens),
+                    **{
+                        "compression": "gzip",
+                        "compression_opts": 4,
+                    },
+                )
+                group.create_dataset(
+                    "masking_transcript_params",
                     data=np.array(mask_params),
                     **{
                         "compression": "gzip",
