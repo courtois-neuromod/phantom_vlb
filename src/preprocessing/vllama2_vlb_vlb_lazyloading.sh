@@ -24,7 +24,7 @@ SEASON="s${2}"
 python videollama2_vlb_lazyloading.py \
     --features_path "${SCRATCH_PATH}/friends_${SEASON}_features.h5" \
     --timeseries_path "${SCRATCH_PATH}/${SUBNUM}_task-friends_space-MNI152NLin2009cAsym_atlas-Schaefer18_desc-1000Parcels7Networks_timeseries.h5" \
-    --lazy_load_path ${SCRATCH_PATH} \
+    --lazyload_path ${SCRATCH_PATH} \
     --subject ${SUBNUM} \
     --season ${SEASON} \
     --n_split 4 \

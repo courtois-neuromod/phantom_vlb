@@ -27,7 +27,7 @@ def get_arguments():
         '--timeseries_path', required=True, type=str, help="Path to the subject's extracted timeseries file."
     )
     parser.add_argument(
-        '--lazy_load_path', required=True, type=str, help='Path where to save the processed features in .h5 output files.'
+        '--lazyload_path', required=True, type=str, help='Path where to save the processed features in .h5 output files.'
     )
     parser.add_argument(
         '--subject', required=True, type=str, help='subject id, e.g., "sub-01".'
