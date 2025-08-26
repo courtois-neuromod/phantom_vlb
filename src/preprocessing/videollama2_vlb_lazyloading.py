@@ -106,7 +106,7 @@ def make_lazy_loading_dsets(config):
             num_ds_frames = math.floor(num_frames/2) + 1
             step = config.window/(num_ds_frames-1)
             # delay between onset of input window and target TR's time stamp (assigned to middle of a TR, hence +0.5)
-            abs_tr_delay = (self.config.window-1)+self.config.delay + 0.5
+            abs_tr_delay = (config.window-1)+config.delay + 0.5
             run_vis_onsets = 1.49*(abs_tr_delay - np.arange(0, (config.window+step), step))
             run_vis_weights = np.array([
                 get_hrf_weight(t) for t in run_vis_onsets
