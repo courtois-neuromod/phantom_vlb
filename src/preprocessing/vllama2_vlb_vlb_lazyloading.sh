@@ -3,7 +3,7 @@
 #SBATCH --job-name=videollama2_lazyloading
 #SBATCH --output=/project/rrg-pbellec/mstlaure/phantom_vlb/slurm_files/slurm-%A_%a.out
 #SBATCH --error=/project/rrg-pbellec/mstlaure/phantom_vlb/slurm_files/slurm-%A_%a.err
-#SBATCH --time=12:00:00
+#SBATCH --time=3:00:00
 #SBATCH --cpus-per-task=32
 #SBATCH --mem-per-cpu=4000M
 #SBATCH --mail-type=ALL
