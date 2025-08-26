@@ -86,7 +86,7 @@ def make_lazy_loading_dsets(config):
     ).astype(int)
 
     for i in range(config.n_split):
-        ll_path = f"{config.lazyload_path}/friends_llFile_{config.subject}_{config.season}.h5"
+        ll_path = f"{config.lazyload_path}/friends_llFile_{config.subject}_{config.season}_n{i}.h5"
 
         idx = 0
         chunk_epi_list = np.array(epi_list)[chunk_idx==i].tolist()
@@ -158,11 +158,11 @@ def make_lazy_loading_dsets(config):
                     )
                 idx += 1
 
+        with h5py.File(ll_path, "a") as f:
+            f.create_dataset("dset_len", data=[idx+1])
+
     f_file.close()
     b_file.close()
-
-    with h5py.File(ll_path, "a") as f:
-        f.create_dataset("dset_len", data=[idx+1])
         
     print(f"Built lazy loading dset for {subject}, season {s}")
 
