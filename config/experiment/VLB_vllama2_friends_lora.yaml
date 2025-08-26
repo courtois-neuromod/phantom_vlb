@@ -35,7 +35,7 @@ litmodule:
     dropout_rate: 0.1
     num_target: 1000
     l2_lambda: 0.001
-    lr: 1e-3
+    lr: 1e-4
     betas: [0.9, 0.999]
     eps: 1e-08
     weight_decay: 1e-2
