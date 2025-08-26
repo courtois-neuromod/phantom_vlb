@@ -48,7 +48,7 @@ def get_arguments():
     return parser.parse_args()
 
 
-def make_lazy_loading_dsets(conf):
+def make_lazy_loading_dsets(config):
     """
     Load subject's BOLD data timeseries 
     Compile list of extracted episodes (all seasons)
@@ -82,11 +82,11 @@ def make_lazy_loading_dsets(conf):
     ]
 
     chunk_idx = np.floor(
-        np.arange(len(epi_list))/(len(epi_list)/conf.n_split)
+        np.arange(len(epi_list))/(len(epi_list)/config.n_split)
     ).astype(int)
 
-    for i in range(conf.n_split):
-        ll_path = f"{config.lazyload_path}/friends_llFile_{conf.subject}_{conf.season}.h5"
+    for i in range(config.n_split):
+        ll_path = f"{config.lazyload_path}/friends_llFile_{config.subject}_{config.season}.h5"
 
         idx = 0
         chunk_epi_list = np.array(epi_list)[chunk_idx==i].tolist()
