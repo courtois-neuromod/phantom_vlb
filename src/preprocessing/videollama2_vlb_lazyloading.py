@@ -164,7 +164,7 @@ def make_lazy_loading_dsets(config):
     f_file.close()
     b_file.close()
         
-    print(f"Built lazy loading dset for {subject}, season {s}")
+    print(f"Built lazy loading dset for {config.subject}, season {config.season}")
 
 
 if __name__ == "__main__":
