@@ -59,22 +59,24 @@ def make_lazy_loading_dsets(config):
     }
 
     """
-    Load season's pre-extracted vision and language features
-    Compile list of the season's episodes whose data have corresponding
+    Load season's vision and language features pre-extracted with videollama2_vlb_extractfeatures.py
+
+    Compile a list of the season's episodes whose data have corresponding
     BOLD timeseries for that subject.
     
-    Assign episodes to n_split chunks and align the input (video) features and
-    target brain (BOLD) timeseries into examplars for easy batching.
+    Assign episodes to n_split chunks to break down the output. 
+    For each episode, align the input (video) features and the
+    target brain (BOLD) timeseries into examplars to support easy batching.
 
     Since the input window (len = w) includes multiple TRs worth of movie frames,
-    drop the first w - 1 TRs from the INPUT and OUTPUT arrays.
+    drop the first w - 1 TRs from the INPUT and OUTPUT arrays (not a complete window).
     E.g., drop first 2 TRs of the INPUT and OUTPUT arrays when window = 3)
 
-    If delay is n TRs back (the input window offset, as in, how far back from the target TR)
-    - also remove the first n TRs from the brain timeseries (so n + w - 1)
+    Delay is n TRs back from the target TR (the input window offset, as in, how far back from the target TR)
+    - also remove the first n TRs from the brain timeseries (so remove  n + w - 1)
     - remove the excedent TRs of video frames at the tail END of the input features
-        as they lack corresponding BOLD data
-    - truncate or pad tail end of language features to match length of timeseries matrix
+      as these features lack corresponding BOLD data
+    - truncate or pad the tail end of language features to match the length of the timeseries matrix
     """
     f_file = h5py.File(config.features_path, "r")
     epi_list = [
@@ -115,7 +117,7 @@ def make_lazy_loading_dsets(config):
             run_language = np.array(f_file[ep_num]['transcript_features'])[(config.window-1):]
             run_lang_onsets = np.array(f_file[ep_num]['transcript_onsets'])[(config.window-1):]
             """
-            Three int saved per examplar
+            Three int are saved for each examplar during feature extraction.
             index 0: (pad_len) number of 0s padded at end of language input ids (right-side padding)
             index 1: (inst_len) number of tokens in the instruction portion of the input lang sequence
             index 2: (diag_len) number of tokens in the dialogue portion of the input lang sequence
@@ -127,7 +129,7 @@ def make_lazy_loading_dsets(config):
                 (run_tseries.shape[0], run_vision.shape[0], run_language.shape[0]),
             )
 
-            # Save run's examplars (input and output) to .h5 file 
+            # Save the run's examplars (input and output) to chunk's output .h5 file 
             for n in range(n_rows):
                 pad_len, inst_len, diag_len = run_maskval[n]
                 trial_lang_weights = np.array([
@@ -159,7 +161,7 @@ def make_lazy_loading_dsets(config):
                 idx += 1
 
         with h5py.File(ll_path, "a") as f:
-            f.create_dataset("dset_len", data=[idx+1])
+            f.create_dataset("dset_len", data=[idx])
 
     f_file.close()
     b_file.close()

@@ -6,15 +6,19 @@ datamodule:
   config:
     _target_:
       src.datamodule.VLBDataModuleConfig
+    features_path: $SCRATCH_PATH/friends_*_features.h5
+    timeseries_path:
+      "$SCRATCH_PATH/${subject}_task-friends_space-\
+      MNI152NLin2009cAsym_atlas-Schaefer18_desc-1000Parcels7Networks_timeseries.h5"
     lazyload_path: $SCRATCH_PATH/friends_${subject}_*_llFile.h5
-    subject: ${subject}
-    seasons: [s1, s2, s4, s5, s6]
     delay: 3
     window: 3
+    seasons: [s01, s02, s04, s05, s06]
+    subject: ${subject}
     random_state: ${random_state}
-    shuffle_val_data: False
     batch_size: 3
     num_workers: 39
+    shuffle_val_data: False
 
 litmodule:
   _target_:
