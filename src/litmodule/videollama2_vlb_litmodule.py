@@ -355,7 +355,7 @@ class VLBLitModule(LightningModule):
         self.validation_targets.clear()
 
         # Compute Pearson correlation per ROI (num_target)
-        pearson = torchmetrics.PearsonCorrCoef(num_outputs=self.config.num_target)
+        pearson = PearsonCorrCoef(num_outputs=self.config.num_target)
         correlations = pearson(all_preds.T, all_targets.T)
 
         # Log correlation values per ROI
