@@ -136,7 +136,7 @@ class VLBDatasets:
         f_list = []
         for s in self.config.seasons:
             f_list += sorted(glob.glob(
-                self.config.ll_path.replace('$SCRATCH_PATH', os.environ["SCRATCH_PATH"]).replace('s*', f"{s}")
+                self.config.lazyload_path.replace('$SCRATCH_PATH', os.environ["SCRATCH_PATH"]).replace('s*', f"{s}")
             )) 
         # split feature files between train and val datasets
         r = np.random.RandomState(self.config.random_state)
