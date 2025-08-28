@@ -356,7 +356,8 @@ class VLBLitModule(LightningModule):
 
         # Compute Pearson correlation per ROI (num_target)
         pearson = PearsonCorrCoef(num_outputs=self.config.num_target)
-        correlations = pearson(all_preds.T, all_targets.T)
+        #correlations = pearson(all_preds.T, all_targets.T)
+        correlations = pearson(all_preds, all_targets)
 
         # Log correlation values per ROI
         for i in range(self.config.num_target):
