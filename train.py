@@ -45,7 +45,7 @@ def train(config: DictConfig) -> None:
     datamodule = instantiate(
         config.datamodule,
     )
-    comet_logger.log_hyperparams(datamodule.dset_names)
+    comet_logger.log_hyperparams(datamodule.datasets.dset_names)
 
     litmodule = instantiate(
         config.litmodule,
