@@ -21,7 +21,6 @@ from src import (
 )
 
 
-
 def get_idx(ranges, val):
     for i, (min_val, max_val) in enumerate(ranges):
         if min_val <= val < max_val:
@@ -144,6 +143,11 @@ class VLBDatasets:
         train_files = [
             x for x in f_list if x not in val_file
         ]
+        # log train and val dsets as h-params
+        self.dset_names = {
+            'val_set': [os.path.basename(x) for x in val_file],
+            'train_set': [os.path.basename(x) for x in train_files],
+        }
         # instantiate lazyloading datasets
         self.val = VLB_Dataset(val_file)
         self.train = VLB_Dataset(train_files)

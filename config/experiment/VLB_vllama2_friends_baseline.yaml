@@ -50,13 +50,18 @@ trainer:
   val_check_interval: 0.2
   log_every_n_steps: 15
 
-exp_logger:
+comet_logger:
   _target_: lightning.pytorch.loggers.CometLogger
   api_key: ${my_api_key}
   workspace: ${my_workspace}
   project: phantom_mm
   name: vllama2_vlb_friends_baseline_${subject}
 
-output_dir: ./results/videollama2/brain_finetune/friends/lightning_ckpt/baseline
+output_dir: ./results/videollama2/brain_finetune/friends/lightning_ckpt/baseline/${subject}
+
+cvs_logger:
+  _target_: lightning.pytorch.loggers.CSVLogger
+  save_dir: ${output_dir}
+  name: vllama2_vlb_friends_baseline_${subject}
 
 name: vllama2_vlb_friends

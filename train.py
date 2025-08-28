@@ -27,20 +27,25 @@ def train(config: DictConfig) -> None:
         LearningRateMonitor(logging_interval="epoch"),
     ]
 
-    logger = instantiate(
-        config.exp_logger,
+    comet_logger = instantiate(
+        config.comet_logger,
     )
-    logger.log_hyperparams(dict(config))
+    comet_logger.log_hyperparams(dict(config))
+
+    cvs_logger = instantiate(
+        config.cvs_logger,
+    )
 
     trainer = instantiate(
         config.trainer,
-        logger=logger,
+        logger=[comet_logger, cvs_logger],
         callbacks=callbacks,
     )
 
     datamodule = instantiate(
         config.datamodule,
     )
+    comet_logger.log_hyperparams(datamodule.dset_names)
 
     litmodule = instantiate(
         config.litmodule,
@@ -51,8 +56,7 @@ def train(config: DictConfig) -> None:
     trainer.save_checkpoint(config.output_dir)
 
     # TODO: adapt checkpoints to saving only LoRA adapters when using LoRA
-    # TODO: export accuracy metrics (val set) to plot on the brain
-
+    
 if __name__ == "__main__":
 
     """
