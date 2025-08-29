@@ -78,6 +78,9 @@ Adapted from:
 https://tanmay17061.medium.com/pytorch-lightning-%EF%B8%8F-youre-probably-using-the-wrong-metric-for-early-stopping-or-model-a7077ef8e55d
 Official Doc:
 https://lightning.ai/docs/pytorch/stable/extensions/callbacks.html
+
+Custom callback to log validation prediction accuracy (pearson corr),
+per target ROI and on average.
 """
 class LogValAccuracyCallback(Callback):
 
