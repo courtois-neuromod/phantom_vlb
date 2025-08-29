@@ -7,7 +7,7 @@ import torch.nn.functional as F
 
 from lightning.pytorch import LightningModule
 from peft import LoraConfig, get_peft_model
-from torchmetrics import PearsonCorrCoef
+#from torchmetrics import PearsonCorrCoef
 from torch.optim import Adam, AdamW, lr_scheduler
 from transformers import (
     AutoConfig,

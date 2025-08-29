@@ -81,9 +81,6 @@ https://lightning.ai/docs/pytorch/stable/extensions/callbacks.html
 """
 class LogValAccuracyCallback(Callback):
 
-    def __init__(self, metric_to_function_dict):
-        pass
-
     #def on_validation_start(self, trainer, pl_module):
     def on_validation_epoch_start(self, trainer, pl_module):
         self.val_actual = []
