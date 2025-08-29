@@ -6,7 +6,9 @@ https://github.com/courtois-neuromod/phantom_LLM/blob/dev_beluga/phantom_LLM/src
 import numpy as np
 import torch
 import torch.nn as nn
+from lightning.pytorch.callbacks import Callback
 from nilearn.glm.first_level import compute_regressor
+from torchmetrics import PearsonCorrCoef
 
 
 def get_hrf_weight(time_diff: float) -> float:
@@ -69,3 +71,40 @@ class RidgeRegressionLayer(nn.Module):
             return output, l2_reg
         else:
             return output
+
+
+"""
+Adapted from:
+https://tanmay17061.medium.com/pytorch-lightning-%EF%B8%8F-youre-probably-using-the-wrong-metric-for-early-stopping-or-model-a7077ef8e55d
+Official Doc:
+https://lightning.ai/docs/pytorch/stable/extensions/callbacks.html
+
+Custom callback to log validation prediction accuracy (pearson corr),
+per target ROI and on average.
+"""
+class LogValAccuracyCallback(Callback):
+
+    #def on_validation_start(self, trainer, pl_module):
+    def on_validation_epoch_start(self, trainer, pl_module):
+        self.val_actual = []
+        self.val_pred = []
+        #self.val_actual_npy = np.empty(shape=(0,pl_module.config.num_target), dtype=float)
+        #self.val_pred_npy = np.empty(shape=(0,pl_module.config.num_target), dtype=float)
+
+    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx=0):
+        self.val_actual.append(outputs["brain_vals"])
+        self.val_pred.append(outputs["brain_preds"])
+        #self.val_actual_npy = np.concatenate((self.val_actual_npy,outputs["brain_vals"]), axis=0)
+        #self.val_pred_npy = np.concatenate((self.val_pred_npy,outputs["brain_preds"]), axis=0)
+
+    #def on_validation_end(self, trainer, pl_module):
+    def on_validation_epoch_end(self, trainer, pl_module):
+        all_vals = torch.nan_to_num(torch.cat(self.val_actual, dim=0))
+        all_preds = torch.nan_to_num(torch.cat(self.val_pred, dim=0))
+
+        pearson = PearsonCorrCoef(num_outputs=pl_module.config.num_target).to(all_vals.device)
+        correlations = pearson(all_preds, all_vals)
+
+        for i in range(pl_module.config.num_target):
+            pl_module.log(f"val_corr_ROI_{i:0{6}}", correlations[i])
+        pl_module.log("val_corr_avg", correlations.mean())

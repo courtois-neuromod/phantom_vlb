@@ -1,9 +1,3 @@
-#import logging
-#import multiprocessing as mp
-#import os
-
-#import subprocess
-#from pathlib import Path
 import comet_ml
 import hydra
 from hydra.utils import instantiate
@@ -16,19 +10,10 @@ from omegaconf import DictConfig, OmegaConf
     config_path="config",
 )
 def train(config: DictConfig) -> None:
-    """.
-
-    Args:
-        config (DictConfig): .
-
-    Returns:
-        The validation loss.
-    """
-    # Debugging sanity checks
-    #logging.info(config)
-
+    """."""
     import lightning as L
     from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
+    from src import LogValAccuracyCallback
 
     L.seed_everything(config.random_state)
     
@@ -41,22 +26,28 @@ def train(config: DictConfig) -> None:
             save_last=True,
         ),
         LearningRateMonitor(logging_interval="epoch"),
+        LogValAccuracyCallback(),
     ]
 
-    logger = instantiate(
-        config.exp_logger,
+    comet_logger = instantiate(
+        config.comet_logger,
     )
-    logger.log_hyperparams(dict(config))
+    comet_logger.log_hyperparams(dict(config))
+
+    cvs_logger = instantiate(
+        config.cvs_logger,
+    )
 
     trainer = instantiate(
         config.trainer,
-        logger=logger,
+        logger=[comet_logger, cvs_logger],
         callbacks=callbacks,
     )
 
     datamodule = instantiate(
         config.datamodule,
     )
+    comet_logger.log_hyperparams(datamodule.datasets.dset_names)
 
     litmodule = instantiate(
         config.litmodule,
@@ -64,14 +55,10 @@ def train(config: DictConfig) -> None:
 
     trainer.fit(model=litmodule, datamodule=datamodule)
 
-    #logging.info(
-    #    f"Best model saved at {callbacks[0].best_model_path}, \
-    #       with a val loss of {callbacks[0].best_model_score}"
-    #)
     trainer.save_checkpoint(config.output_dir)
 
     # TODO: adapt checkpoints to saving only LoRA adapters when using LoRA
-
+    
 if __name__ == "__main__":
 
     """

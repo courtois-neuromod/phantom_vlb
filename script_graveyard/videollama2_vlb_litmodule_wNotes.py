@@ -7,7 +7,6 @@ import torch.nn.functional as F
 
 from lightning.pytorch import LightningModule
 from peft import LoraConfig, get_peft_model
-#from torchmetrics import PearsonCorrCoef
 from torch.optim import Adam, AdamW, lr_scheduler
 from transformers import (
     AutoConfig,
@@ -99,25 +98,57 @@ def load_pretrained_vllama2(
     model.get_model().vision_tower.requires_grad_(False)
 
     if config.use_lora:
+        # TODO: implement LoRA
+        # https://github.com/courtois-neuromod/phantom_LLM/blob/dev_beluga/phantom_LLM/src/utils.py
+        # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/main/scripts/custom/finetune_lora.sh
+        # --lora_enable True --lora_r 128 --lora_alpha 256
+        # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/main/videollama2/train.py
+        # https://gemini.google.com/app/41844d6e03d7786e
         """
-        default vllama2 params
-            lora_r: int = 64
-            lora_alpha: int = 16
-            lora_dropout: float = 0.05
+        # Lora or Quant Arguments
+        double_quant: bool = field(
+            default=True,
+            metadata={"help": "Compress the quantization statistics through double quantization."}
+        )
+        quant_type: str = field(
+            default="nf4",
+            metadata={"help": "Quantization data type to use. Should be one of `fp4` or `nf4`."}
+        )
+        bits: int = field(
+            default=16,
+            metadata={"help": "How many bits to use."}
+        )
+        lora_enable: bool = False
+        lora_r: int = 64
+        lora_alpha: int = 16
+        lora_dropout: float = 0.05
+        lora_weight_path: str = ""
+        lora_bias: str = "none"   
 
-        from their finetune_lora.sh script
+        from finetune_lora.sh
         --lora_r 128 --lora_alpha 256
 
-        https://huggingface.co/docs/peft/en/package_reference/peft_types
+        From Gemini flash 2.5
+        r: 
+            This is the most crucial hyperparameter. It determines the rank of the low-rank matrices. A higher rank means more trainable parameters but potentially better performance. A common starting point is r=8 or r=16.
+        lora_alpha: 
+            A scaling factor for the LoRA weights. A higher value gives more weight to the new LoRA matrices. A common practice is to set it to r * 2.
+        target_modules:
+            A list of the layers to which LoRA should be applied. For most models, this includes linear layers like q_proj, k_proj, v_proj, and out_proj in attention blocks.
+        lora_dropout:
+            The dropout rate for the LoRA layers.
+
+        https://huggingface.co/docs/peft/main/en/package_reference/lora#peft.LoraConfig
         """
         lora_config = LoraConfig(
-            task_type="FEATURE_EXTRACTION", 
-            r=config.lora_r,
-            lora_alpha=config.lora_alpha,
-            lora_dropout=config.lora_dropout,
+            task_type="FEATURE_EXTRACTION", # https://huggingface.co/docs/peft/en/package_reference/peft_types
+            r=config.lora_r,  # 16
+            lora_alpha=config.lora_alpha,  # 32,
+            lora_dropout=config.lora_dropout,  # 0.1,
             target_modules=find_all_linear_names(model),
         )
         model = get_peft_model(model, lora_config)
+        #model.print_trainable_parameters()
 
     return model
 
@@ -154,6 +185,8 @@ class VLBLitModuleConfig:
 
     def __post_init__(self):
         self.dtype = torch.bfloat16  # torch.bfloat16 for newer GPUs
+        #self.device = "cpu"
+        #self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.device_map="auto"
 
 
@@ -178,12 +211,15 @@ class VLBLitModule(LightningModule):
     def make_weight_mask(self, pad_vals, vis_weights, lang_weights, lang_len, max_len):
 
         feature_len = (vis_weights.shape[1]*13*13) + lang_len - 1
-        assert feature_len == max_len
+        assert feature_len == max_len # padded so text + vis == 2048
         
         weight_batch = []
         for i in range(pad_vals.shape[0]):
 
             pad_len, inst_len, dialog_len = pad_vals[i]
+            #pad_len = pad_vals[i][0].item()
+            #inst_len = pad_vals[i][1].item()
+            #dialog_len = pad_vals[i][2].item()
 
             trial_weights = torch.cat([
                 vis_weights[i].repeat_interleave(13*13).to(self.config.dtype),
@@ -206,7 +242,28 @@ class VLBLitModule(LightningModule):
     def configure_model(
         self: "VLBLitModule",
     ) -> None:
-        """."""
+        """
+        When training model on multiple GPUs with FSDP with lightening,
+        do not instantiate large layers in __init__() .
+        Instead, delay the creation of large layers to the configure_model() hook.
+        Source
+        https://lightning.ai/docs/pytorch/stable/advanced/model_init.html#model-parallel-training-fsdp-and-deepspeed
+        """
+        # Debugging distributed environment
+        #print(f"[{os.getpid()}] Rank: {os.getenv('RANK', 'N/A')}")
+        #print(f"[{os.getpid()}] Local Rank: {os.getenv('LOCAL_RANK', 'N/A')}")
+        #print(f"[{os.getpid()}] World Size: {os.getenv('WORLD_SIZE', 'N/A')}")
+        #print(f"[{os.getpid()}] Master Addr: {os.getenv('MASTER_ADDR', 'N/A')}")
+        #print(f"[{os.getpid()}] Master Port: {os.getenv('MASTER_PORT', 'N/A')}")
+        #print(f"[{os.getpid()}] CUDA_VISIBLE_DEVICES: {os.getenv('CUDA_VISIBLE_DEVICES', 'N/A')}")
+
+        # Check if distributed is initialized (will be False if not)
+        #print(f"[{os.getpid()}] torch.distributed.is_initialized(): {dist.is_initialized()}")
+        #if dist.is_initialized():
+        #    print(f"[{os.getpid()}] dist.get_rank(): {dist.get_rank()}")
+        #    print(f"[{os.getpid()}] dist.get_world_size(): {dist.get_world_size()}")
+        #    print(f"[{os.getpid()}] Current device: {torch.cuda.current_device()}")
+
         self.nnmodule = load_pretrained_vllama2(self.config)
         kwargs = {
             #"device": self.config.device,
@@ -228,6 +285,9 @@ class VLBLitModule(LightningModule):
 
     def forward(self, x_video, x_lang, weight_mask, attention_mask=None):
         """."""
+        # https://github.com/courtois-neuromod/phantom_LLM/blob/7258a5e95fe256d9ae4669dc5a1ca1be34a0d867/phantom_LLM/src/models/ridge_align.py#L76
+
+        # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/c0bb03abf6b8a6b9a8dccac006fb4db5d4d9e414/videollama2/model/videollama2_llama.py#L61
         outputs = self.nnmodule(
             input_ids = x_lang,
             attention_mask = attention_mask,
@@ -242,13 +302,23 @@ class VLBLitModule(LightningModule):
         connector output (temporally agregated video features) are of dim torch.Size([1, 1183, 4096])
         where 4096 is hidden dim size, and 1183 is the sequence lenght for 12 frames of 336x336 video input  (169*7 = 1183...)
         """
+        # outputs (from last hidden layer)
         hidden_states = self.layer_norm1(outputs.hidden_states[-1])
 
+        # video_gpt: pca, ridge on brain encooding (but not w gradient descent)
+        # https://github.com/courtois-neuromod/video_transformer/blob/0906e9a71a2fdb511190f7a757c8aadcb1f6c990/scripts/apply_gpt_ridge_encoding.py#L96
+
+        # Apply HRF Convolution
+        # TODO: figure out squeezing, output dim... (depends batch size)
         hrf_embeddings = self.dropout(
             self.layer_norm2(
                 self.hrf_layer(hidden_states, weight_mask,
-                )
+                )#.squeeze(1)
         ))
+
+        # Remove the singleton dimension (NEEDED?)
+        #hrf_embeddings = hrf_embeddings.squeeze(-1)
+        # print(f"HRF embeddings shape after squeeze: {hrf_embeddings.shape}")
 
         # Apply Ridge Regression
         regression_output, l2_reg = self.ridge_layer(hrf_embeddings)
@@ -264,10 +334,21 @@ class VLBLitModule(LightningModule):
         If it returns a dictionary, items get stacked under each given key, and can
         get called by that key from a batch dictionary. E.g. here "timeseries", "vision", "language"
         """
+        # Adapted from videollama2 inference
+        # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/__init__.py#L32
+        # image_or_video (torch.Tensor): image tensor (1, C, H, W) / video tensor (T, C, H, W).
+        # From VLLaMA2 code: prepare input ids for multimodal
+        # https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/c0bb03abf6b8a6b9a8dccac006fb4db5d4d9e414/videollama2/model/videollama2_arch.py#L161
+        #x_video = [(batch["vision"][i].to(self.config.dtype).to(self.config.device), "video") for i in range(batch["vision"].shape[0])]
+        #x_video = [(batch["vision"][i].to(self.config.dtype).to(self.device), "video") for i in range(batch["vision"].shape[0])]
         x_video = [(batch["vision"][i].to(self.config.dtype), "video") for i in range(batch["vision"].shape[0])]
 
+        #x_lang = batch["language"].long().to(self.config.device)  # tensor dim = (batch_size, num_feat,) dtype = torch.float32
+        #attention_mask = x_lang.ne(0).long().to(self.config.device)
+        #x_lang = batch["language"].long().to(self.device)  # tensor dim = (batch_size, num_feat,) dtype = torch.float32
         x_lang = batch["language"].long()
 
+        #attention_mask = x_lang.ne(0).long().to(self.device)
         attention_mask = x_lang.ne(0).long()
 
         weight_mask = self.make_weight_mask(
@@ -276,7 +357,8 @@ class VLBLitModule(LightningModule):
             batch["lang_weights"],
             x_lang.shape[1],
             self.nnmodule.config.tokenizer_model_max_length,
-        )
+        )#.to(self.device)
+        #).to(self.config.device)
 
         brain_encoding, l2_reg = self.forward(
              x_video,
@@ -285,7 +367,8 @@ class VLBLitModule(LightningModule):
              attention_mask = attention_mask,
         )
 
-        y = batch["timeseries"].to(self.config.dtype)
+        #y = batch["timeseries"].to(self.config.dtype).to(self.config.device)  # dim = (batch_size, 1000,) dtype = torch.float32
+        y = batch["timeseries"].to(self.config.dtype)#.to(self.device)  # dim = (batch_size, 1000,) dtype = torch.float32
 
         """
         Implement loss function...
@@ -309,11 +392,15 @@ class VLBLitModule(LightningModule):
     def validation_step(self, batch):
         """."""
         x_video = [
+            #(batch["vision"][i].to(self.config.dtype).to(self.config.device), "video") for i in range(batch["vision"].shape[0])
+            #(batch["vision"][i].to(self.config.dtype).to(self.device), "video") for i in range(batch["vision"].shape[0])
             (batch["vision"][i].to(self.config.dtype), "video") for i in range(batch["vision"].shape[0])
         ]
 
-        x_lang = batch["language"].long()
-        attention_mask = x_lang.ne(0).long()
+        #x_lang = batch["language"].long().to(self.config.device)
+        #attention_mask = x_lang.ne(0).long().to(self.config.device)
+        x_lang = batch["language"].long()#.to(self.device)
+        attention_mask = x_lang.ne(0).long()#.to(self.device)
 
         weight_mask = self.make_weight_mask(
             batch["padvals"],
@@ -321,7 +408,8 @@ class VLBLitModule(LightningModule):
             batch["lang_weights"],
             x_lang.shape[1],
             self.nnmodule.config.tokenizer_model_max_length,
-        )
+        )#.to(self.device)
+        #).to(self.config.device)
 
         brain_encoding, l2_reg = self.forward(
              x_video,
@@ -330,16 +418,12 @@ class VLBLitModule(LightningModule):
              attention_mask = attention_mask,
         )
 
-        y = batch["timeseries"].to(self.config.dtype)
+        #y = batch["timeseries"].to(self.config.dtype).to(self.config.device)
+        y = batch["timeseries"].to(self.config.dtype)#.to(self.device)
         brain_loss = F.mse_loss(brain_encoding, y) + l2_reg
-
         self.log("val/brain_loss", brain_loss)
 
-        return {
-            'loss': brain_loss,
-            'brain_preds': brain_encoding.detach(),
-            'brain_vals': y.detach(),
-        }
+        return brain_loss
 
 
     def configure_optimizers(
@@ -354,7 +438,14 @@ class VLBLitModule(LightningModule):
             ``LRScheduler`` instance attributes (each nested in a
             list).
         """
+        #print(f"Rank: {os.getenv('RANK', 'N/A')}, Local Rank: {os.getenv('LOCAL_RANK', 'N/A')}")
+        #print(f"World Size: {os.getenv('WORLD_SIZE', 'N/A')}")
+        #print(f"Master Address: {os.getenv('MASTER_ADDR', 'N/A')}, Master Port: {os.getenv('MASTER_PORT', 'N/A')}")
+
+        # https://hydra.cc/docs/advanced/instantiate_objects/overview/
+        # https://pytorch.org/docs/stable/generated/torch.optim.AdamW
         self.optimizer = AdamW(
+            #params=self.parameters(),
             params = filter(lambda p: p.requires_grad, self.parameters()),
             lr = self.config.lr,
             betas = self.config.betas,

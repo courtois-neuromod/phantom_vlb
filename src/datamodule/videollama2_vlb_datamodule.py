@@ -1,22 +1,5 @@
-"""
-Dataloader
-
-Links:
-- CNeuromax base datamodule:
-https://github.com/courtois-neuromod/cneuromax/blob/main/cneuromax/fitting/deeplearning/datamodule/base.py
-- Video transformer replay datamodule:
-https://github.com/courtois-neuromod/video_transformer/blob/main/src/datasets/replay_datamodule.py
-
-- phantom_LLM
-Isil data loading for brain alignment:
-https://github.com/courtois-neuromod/phantom_LLM/blob/dev_align/phantom_LLM/src/models/run_baseline.py
-
-- VideoLLaMa2
-https://github.com/DAMO-NLP-SG/VideoLLaMA2/blob/99bce703036a498f8e76a2adb9fd3f50c969beb0/videollama2/train.py#L248
-"""
-
 import math
-import os
+import os, glob
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,6 +19,13 @@ sys.path.append('../../')
 from src import (
     get_hrf_weight,
 )
+
+
+def get_idx(ranges, val):
+    for i, (min_val, max_val) in enumerate(ranges):
+        if min_val <= val < max_val:
+            return i
+    return -1
 
 
 @dataclass
@@ -61,9 +51,6 @@ class VLBDataModuleConfig:
             :func:`.find_good_per_device_num_workers` which is\
             not recommended for resource efficiency.
     """
-
-    features_path: str
-    timeseries_path: str
     lazyload_path: str
     subject: str
     seasons: list[str]
@@ -74,159 +61,51 @@ class VLBDataModuleConfig:
     batch_size: int = 1
     num_workers: int = 0
 
-    # from cneuromax; re-use?
-    #device: An[str, one_of("cpu", "gpu")] = "${config.device}"
-    #shuffle_val_data: bool = True
-    #max_per_device_batch_size: An[int, ge(1)] | None = None
-    #fixed_per_device_batch_size: An[int, ge(1)] | None = None
-    #fixed_per_device_num_workers: An[int, ge(0)] | None = None
-
 
 class VLB_Dataset(Dataset):
     def __init__(
         self: "VLB_Dataset",
-        config: VLBDataModuleConfig,
-        seasons: list[str],
-        set_name: str,
+        ds_paths: list[str],
     ) -> None:
         """
         Vision-Language-Brain dataloader for VideoLLaMa2 fine-tuning
+        
+        Features were preprocessed with videollama2_vlb_extractfeatures.py
+        and videollama2_vlb_lazyloading.py for fast and easy batching
         Args:
             config: datamodule configuration parameters
             seasons: list of str, friends seasons dedicated to a given dataset
         """
-        self.config = config
-        self.seasons = seasons
-        self.ds_file = None
-        self.set_name = set_name
+        self.ds_files = {}
+        self.length = 0
+        self.ranges = []
 
-        # todo: fix this!
-        # implement function that builds datamatrices for predictor features and output target features
-        # Align them!
-        # For input: since includes 3 TRs window of frames, can only start at
-        # input TR = 2 (drop first 2 TRs of INPUT and OUTPUT when window = 3)
-
-        # delay is 3 TRs back (window offset)
-        # - remove first 3 TRs of brain timeseries; (if 3 = self.delay)
-        # - remove excedent TRs of video frames input features at the tail END
-        # - truncate or pad tail end of language features to match length of timeseries
-        # - concatenate across all runs... sample from it w getitem function
-        #self.ll_path = self.config.lazyload_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"]).replace('*', f"{self.set_name}")
-        self.ll_path = self.config.lazyload_path.replace('$SCRATCH_PATH', os.environ["SCRATCH_PATH"]).replace('*', f"{self.set_name}")
-        #f_path = self.config.features_path
-
-        if not Path(self.ll_path).exists():
-            """
-            Build dataset's lazy loading file
-            """
-            idx = 0
-            # load brain timeseries .h5 file
-            #b_path = self.config.timeseries_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"])
-            b_path = self.config.timeseries_path.replace('$SCRATCH_PATH', os.environ["SCRATCH_PATH"])
-            b_file = h5py.File(b_path, "r")
-            ep_keys = {
-                run.split("_")[1].split("-")[-1]: (ses, run) for ses, val in b_file.items() for run in val.keys()
+        for i, ds_path in enumerate(ds_paths):
+            self.ds_files[i] = {
+                'ds_file': h5py.File(ds_path, "r"),
+                'idx_from': self.length,
             }
 
-            for s in self.seasons:
-
-                #f_path = self.config.features_path.replace('$SLURM_TMPDIR', os.environ["SLURM_TMPDIR"]).replace('*', f"s{s[-1]}")
-                f_path = self.config.features_path.replace('$SCRATCH_PATH', os.environ["SCRATCH_PATH"]).replace('*', f"s{s[-1]}")
-                f_file = h5py.File(f_path, "r")
-                epi_list = [
-                    x for x in f_file.keys()
-                ]
-
-                for ep_num in epi_list:
-                    if ep_num in ep_keys:
-                        ses, run = ep_keys[ep_num]
-                        run_tseries = np.array(b_file[ses][run])[(self.config.window-1)+self.config.delay:]
-                        # TR onset assigned to the middle of a TR; onset + (1.49s/2)
-                        run_tr_onsets = [((self.config.window-1)+self.config.delay+0.5+i)*1.49 for i in range(run_tseries.shape[0])]
-
-                        run_vision = np.array(f_file[ep_num]['video_features'])[(self.config.window-1):]
-                        num_frames = run_vision.shape[1]
-                        """
-                        Time diff from middle of TR for each downsampled frame's hidden features
-                        Downsampled by sampler of vllama2 connector, a nn.3DConv layer (pad=1, stride=2)
-                        12 frames of 24x24 -> 7 downsampled frames of 13x13 (169 features/frame)
-                        """
-                        num_ds_frames = math.floor(num_frames/2) + 1
-                        step = self.config.window/(num_ds_frames-1)
-                        # delay between onset of input window and target TR's time stamp (assigned to middle of a TR, hence +0.5)
-                        abs_tr_delay = (self.config.window-1)+self.config.delay + 0.5
-                        run_vis_onsets = 1.49*(abs_tr_delay - np.arange(0, (self.config.window+step), step))
-                        run_vis_weights = np.array([
-                                get_hrf_weight(t) for t in run_vis_onsets
-                            ])
-
-                        run_language = np.array(f_file[ep_num]['transcript_features'])[(self.config.window-1):]
-                        run_lang_onsets = np.array(f_file[ep_num]['transcript_onsets'])[(self.config.window-1):]
-                        """
-                        Three int per examplar
-                        0: number of 0s padded at end of language input ids (right-side padding)
-                        1: number of tokens in the instruction portion of the input lang sequence
-                        2: number of tokens in the dialogue portion of the input lang sequence
-                        """
-                        run_maskval = np.array(f_file[ep_num]['masking_params'])[(self.config.window-1):]
-
-                        assert run_maskval.shape[0] == run_language.shape[0]
-                        n_rows = min(
-                            (run_tseries.shape[0], run_vision.shape[0], run_language.shape[0]),
-                        )
-
-                        for n in range(n_rows):
-                            pad_len, inst_len, diag_len = run_maskval[n]
-                            trial_lang_weights = np.array([
-                                get_hrf_weight(t) for t in run_tr_onsets[n] - run_lang_onsets[n][:diag_len]
-                            ])
-                            run_lang_onsets[n][:diag_len] = trial_lang_weights
-                            #run_lang_onsets[n][:diag_len] = run_tr_onsets[n] - run_lang_onsets[n][:diag_len]
-
-                            with h5py.File(self.ll_path, "a") as f:
-                                group = f.create_group(f"{idx}")
-                                group.create_dataset(
-                                    f"{idx}_timeseries", data=run_tseries[n],
-                                )
-                                group.create_dataset(
-                                    f"{idx}_vision", data=run_vision[n],
-                                )
-                                group.create_dataset(
-                                    f"{idx}_vis_weights", data=run_vis_weights,
-                                )
-                                group.create_dataset(
-                                    f"{idx}_language", data=run_language[n],
-                                )
-                                group.create_dataset(
-                                    f"{idx}_lang_weights", data=run_lang_onsets[n],  # converted to weights
-                                )
-                                group.create_dataset(
-                                    f"{idx}_padvals", data=run_maskval[n],
-                                )
-                            idx += 1
-
-                f_file.close()
-            b_file.close()
-
-            with h5py.File(self.ll_path, "a") as f:
-                f.create_dataset("dset_len", data=[idx+1])
-
-        with h5py.File(self.ll_path, "r") as f:
-            #self.length = max([int(s) for s in f.keys()]) + 1
-            self.length = np.array(f["dset_len"])[0]
+            ds_length = int(np.array(
+                self.ds_files[i]['ds_file']['dset_len']
+            )[0])
+            self.ranges.append((self.length, self.length + ds_length))
+            self.length += ds_length
 
     def __len__(self):
         return self.length
 
     def __getitem__(self, idx):
-        if self.ds_file is None:
-            self.ds_file = h5py.File(self.ll_path, "r")
+        """."""
+        i = get_idx(self.ranges, idx)
+        ds_file = self.ds_files[i]['ds_file']
+        set_idx = idx - self.ds_files[i]['idx_from']
+
         item = {}
-        # TODO: validate this part w lit module train step
         for mod in ['timeseries', 'vision', 'language']:
-            item[mod] = torch.from_numpy(np.array(self.ds_file[f"{idx}"][f"{idx}_{mod}"])).float()
+            item[mod] = torch.from_numpy(np.array(ds_file[f"{set_idx}"][f"{set_idx}_{mod}"])).float()
         for mod in ['padvals', 'vis_weights', 'lang_weights']:
-            item[mod] = np.array(self.ds_file[f"{idx}"][f"{idx}_{mod}"])
+            item[mod] = np.array(ds_file[f"{set_idx}"][f"{set_idx}_{mod}"])
         return item
 
 
@@ -249,15 +128,29 @@ class VLBDatasets:
     test: VLB_Dataset | None = None
 
     def __post_init__(self):
-        # split seasons between train and val datasets
+        """
+        Split feature files into train and val dsets 
+        """
+        # list lazy loading feature files
+        f_list = []
+        for s in self.config.seasons:
+            f_list += sorted(glob.glob(
+                self.config.lazyload_path.replace('$SCRATCH_PATH', os.environ["SCRATCH_PATH"]).replace('s*', f"{s}")
+            )) 
+        # split feature files between train and val datasets
         r = np.random.RandomState(self.config.random_state)
-        val_season = r.choice(self.config.seasons, 1).tolist()
-        train_seasons = [
-            s for s in self.config.seasons if s not in val_season
+        val_file = r.choice(f_list, 1).tolist()
+        train_files = [
+            x for x in f_list if x not in val_file
         ]
+        # log train and val dsets as h-params
+        self.dset_names = {
+            'val_set': [os.path.basename(x) for x in val_file],
+            'train_set': [os.path.basename(x) for x in train_files],
+        }
         # instantiate lazyloading datasets
-        self.val = VLB_Dataset(self.config, val_season, "val")
-        self.train = VLB_Dataset(self.config, train_seasons, "train")
+        self.val = VLB_Dataset(val_file)
+        self.train = VLB_Dataset(train_files)
 
 
 class VLBDataModule(LightningDataModule):
@@ -343,10 +236,3 @@ class VLBDataModule(LightningDataModule):
             dataset=self.datasets.val,
             shuffle=self.config.shuffle_val_data,
         )
-
-
-def build_datamodule(
-    config: DictConfig,
-) -> VLBDataModule:
-    return VLBDataModule(config)
-
