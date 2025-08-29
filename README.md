@@ -1,7 +1,7 @@
 phantom_vlb
 ==============================
 
-A Vision-Language-Brain Model adapted from OpenVLA for the CNeuroMod Phantom project
+A Library to Fine-Tune Vision-Language-Brain Models for the CNeuroMod Phantom project
 
 Project Organization
 ------------
@@ -9,43 +9,34 @@ Project Organization
     ├── LICENSE
     ├── Makefile           <- Makefile with commands like `make data` or `make train`
     ├── README.md          <- The top-level README for developers using this project.
-    ├── data               <- Where the dataset will be installed
+    ├── data               <- Where CNeuroMod datasets are installed (e.g., stimuli, fmriprep BOLD data)
     ├── docs               <- A default Sphinx project; see sphinx-doc.org for details
     │
-    ├── models             <- Trained and serialized models, model predictions, or model summaries
+    ├── models             <- Cache directory to save pre-trained model params
     │
-    ├── notebooks          <- Jupyter notebooks. Naming convention is a number (for ordering),
-    │                         the creator's initials, and a short `-` delimited description, e.g.
-    │                         `1.0-jqp-initial-data-exploration`.
+    ├── config             <- .yaml config files to define params using hydra
     │
-    ├── references         <- Data dictionaries, manuals, and all other explanatory materials.
+    ├── requirements_*.txt   <- The requirements file for reproducing the analysis environment (rorqual or beluga CC cluster)
     │
-    ├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
-    │   └── figures        <- Generated graphics and figures to be used in reporting
-    │
-    ├── requirements.txt   <- The requirements file for reproducing the analysis environment, e.g.
-    │                         generated with `pip freeze > requirements.txt`
-    │
-    ├── setup.py           <- makes project pip installable (pip install -e .) so src can be imported
-    ├── src                <- Source code for use in this project.
-    │   ├── __init__.py    <- Makes src a Python module
+    ├── setup.py            <- makes project pip installable (pip install -e .) so src can be imported
+    ├── src                 <- Source code for use in this project.
+    │   ├── __init__.py     <- Makes src a Python module
+    │   ├── utils.py        <- Miscellaneous support functions
     │   │
-    │   ├── data           <- Scripts to download or generate data
-    │   │   └── make_dataset.py
+    │   ├── datamodule      <- Pytorch lightning datamodule scripts
+    │   │   └── videollama2_vlb_datamodule.py
     │   │
-    │   ├── features       <- Scripts to turn raw data into features for modeling
-    │   │   └── build_features.py
+    │   ├── litmodule       <- Pytorch lightning litmodule scripts
+    │   │   └── videollama2_vlb_litmodule.py
     │   │
-    │   ├── models         <- Scripts to train models and then use trained models to make
-    │   │   │                 predictions
-    │   │   ├── predict_model.py
-    │   │   └── train_model.py
+    │   ├── preprocessing   <- Scripts to extract features from input and to prepare lazy loading batches
+    │   │   ├── videollama2_vlb_extractfeatures.py
+    │   │   └── videollama2_vlb_lazyloading.py
     │   │
-    │   └── visualization  <- Scripts to create exploratory and results oriented visualizations
-    │       └── visualize.py
+    │   └── postprocessing  <- Scripts to project accuracy metrics onto the brain
+    │       └── make_acc_brainmaps.py
     │
-    └── tox.ini            <- tox file with settings for running tox; see tox.testrun.org
-
+    └── train.py            <- Main train script
 
 --------
 
