@@ -173,8 +173,8 @@ class VLBLitModule(LightningModule):
         super().__init__()
 
         self.config: VLBLitModuleConfig = config
-        self.validation_preds = []
-        self.validation_targets = []
+        #self.validation_preds = []
+        #self.validation_targets = []
 
 
     def make_weight_mask(self, pad_vals, vis_weights, lang_weights, lang_len, max_len):
@@ -337,14 +337,18 @@ class VLBLitModule(LightningModule):
 
         # Store brain predictions and targets to compute prediction accuracy
         # (correlations) at the validation set level
-        self.validation_preds.append(brain_encoding.detach().cpu())
-        self.validation_targets.append(y.detach().cpu())
+        #self.validation_preds.append(brain_encoding.detach().cpu())
+        #self.validation_targets.append(y.detach().cpu())
 
         self.log("val/brain_loss", brain_loss)
 
-        return brain_loss
+        return {
+            'loss': brain_loss,
+            'brain_preds': brain_encoding.detach(),
+            'brain_vals': y.detach(),
+        }
 
-
+    """
     def on_validation_epoch_end(self):
         # Concatenate all stored tensors, shape = (val_timepoints, num_target)
         all_preds = torch.cat(self.validation_preds, dim=0)
@@ -365,7 +369,7 @@ class VLBLitModule(LightningModule):
 
         # Log the average correlation across all ROIs
         self.log("val_avg_corr", correlations.mean())
-
+    """
 
     def configure_optimizers(
         self: "VLBLitModule",

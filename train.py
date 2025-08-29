@@ -13,6 +13,7 @@ def train(config: DictConfig) -> None:
     """."""
     import lightning as L
     from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
+    from src import LogValAccuracyCallback
 
     L.seed_everything(config.random_state)
     
@@ -25,6 +26,7 @@ def train(config: DictConfig) -> None:
             save_last=True,
         ),
         LearningRateMonitor(logging_interval="epoch"),
+        LogValAccuracyCallback(),
     ]
 
     comet_logger = instantiate(
