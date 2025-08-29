@@ -103,5 +103,5 @@ class LogValAccuracyCallback(Callback):
         correlations = pearson(all_preds, all_vals)
 
         for i in range(pl_module.config.num_target):
-            pl_module.log(f"val_corr_ROI_{i}", correlations[i])
+            pl_module.log(f"val_corr_ROI_{i:0{6}}", correlations[i])
         pl_module.log("val_corr_avg", correlations.mean())
