@@ -100,7 +100,7 @@ class LogValAccuracyCallback(Callback):
         all_preds = torch.nan_to_num(torch.cat(self.val_pred, dim=0))
 
         pearson = PearsonCorrCoef(num_outputs=pl_module.config.num_target)
-        correlations = pearson(all_preds, all_targets)
+        correlations = pearson(all_preds, all_vals)
 
         for i in range(pl_module.config.num_target):
             pl_module.log(f"val_corr_ROI_{i}", correlations[i])
