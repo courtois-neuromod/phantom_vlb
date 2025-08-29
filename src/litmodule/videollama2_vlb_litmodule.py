@@ -173,8 +173,6 @@ class VLBLitModule(LightningModule):
         super().__init__()
 
         self.config: VLBLitModuleConfig = config
-        #self.validation_preds = []
-        #self.validation_targets = []
 
 
     def make_weight_mask(self, pad_vals, vis_weights, lang_weights, lang_len, max_len):
@@ -335,11 +333,6 @@ class VLBLitModule(LightningModule):
         y = batch["timeseries"].to(self.config.dtype)
         brain_loss = F.mse_loss(brain_encoding, y) + l2_reg
 
-        # Store brain predictions and targets to compute prediction accuracy
-        # (correlations) at the validation set level
-        #self.validation_preds.append(brain_encoding.detach().cpu())
-        #self.validation_targets.append(y.detach().cpu())
-
         self.log("val/brain_loss", brain_loss)
 
         return {
@@ -348,28 +341,6 @@ class VLBLitModule(LightningModule):
             'brain_vals': y.detach(),
         }
 
-    """
-    def on_validation_epoch_end(self):
-        # Concatenate all stored tensors, shape = (val_timepoints, num_target)
-        all_preds = torch.cat(self.validation_preds, dim=0)
-        all_targets = torch.cat(self.validation_targets, dim=0)
-
-        # Clear the lists for the next epoch
-        self.validation_preds.clear()
-        self.validation_targets.clear()
-
-        # Compute Pearson correlation per ROI (num_target)
-        pearson = PearsonCorrCoef(num_outputs=self.config.num_target)
-        #correlations = pearson(all_preds.T, all_targets.T)
-        correlations = pearson(all_preds, all_targets)
-
-        # Log correlation values per ROI
-        for i in range(self.config.num_target):
-            self.log(f"val_corr_ROI_{i}", correlations[i])
-
-        # Log the average correlation across all ROIs
-        self.log("val_avg_corr", correlations.mean())
-    """
 
     def configure_optimizers(
         self: "VLBLitModule",
